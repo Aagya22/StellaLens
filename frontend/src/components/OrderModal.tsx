@@ -45,8 +45,8 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in text-[#1a1a1a]">
       <div className="relative w-full max-w-lg bg-[#FDFAF7] border border-[#5F3041]/10 rounded-2xl p-6 md:p-8 overflow-hidden shadow-2xl">
-        
-        {/* Decorative celestial background glow matching MoonStella warm branding */}
+
+
         <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full bg-[#5F3041]/5 blur-[80px] pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-48 h-48 rounded-full bg-amber-500/5 blur-[80px] pointer-events-none" />
 
@@ -110,7 +110,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
 
             <div className="space-y-4">
               <span className="text-[9px] tracking-[0.2em] font-bold text-[#5F3041] uppercase block">Delivery Information</span>
-              
+
               <div className="space-y-1">
                 <label className="text-xs text-slate-500 font-light" htmlFor="name">Full Name</label>
                 <input

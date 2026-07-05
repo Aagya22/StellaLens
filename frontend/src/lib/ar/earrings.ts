@@ -59,9 +59,7 @@ function normalizeModelToUnit(root) {
   const scale = 1 / maxDim;
   root.scale.multiplyScalar(scale);
 
-  // After scaling, re-measure and shift so the TOP of the model sits at Y=0.
-  // This makes the earring hang downward from the earlobe anchor point naturally,
-  // regardless of the individual model's geometry or artist pivot placement.
+
   const box2 = new THREE.Box3().setFromObject(root);
   const max = new THREE.Vector3();
   const center = new THREE.Vector3();
@@ -69,7 +67,7 @@ function normalizeModelToUnit(root) {
   box2.max.clone().clone();
   max.copy(box2.max);
 
-  // Shift: center X/Z, but pin Y so maxY lands at 0
+
   root.position.x -= center.x;
   root.position.y -= max.y;   // top edge → Y = 0
   root.position.z -= center.z;
@@ -84,7 +82,7 @@ function applyRealisticMaterials(root, modelPath) {
 
       const name = (m.name || "").toLowerCase();
 
-      // Check if it is a diamond, gem, or transparent stone/glass
+
       const isGem = name.includes("diamond") ||
         name.includes("gem") ||
         name.includes("stone") ||
@@ -94,16 +92,16 @@ function applyRealisticMaterials(root, modelPath) {
         m.transparent === true;
 
       if (isGem) {
-        // High fidelity physical diamond/gemstone material with rich vibrant colors
+
         return new THREE.MeshPhysicalMaterial({
           color: 0xffffff,
           metalness: 0.1,
           roughness: 0.05,
-          transmission: 0.45, // Lowered from 0.9 to increase pigment opacity
+          transmission: 0.45,
           thickness: 0.8,
-          ior: 1.7, // Rubies and emeralds IOR
+          ior: 1.7,
           envMapIntensity: 4.5,
-          clearcoat: 1.0, // Wet-look reflective top layer
+          clearcoat: 1.0,
           clearcoatRoughness: 0.0,
           side: THREE.DoubleSide,
           transparent: true,

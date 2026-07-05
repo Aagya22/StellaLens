@@ -57,17 +57,12 @@ function landmarkAt(landmarks, index) {
   return p;
 }
 
-/**
- * FaceTracker
- * - Initializes MediaPipe Face Landmarker
- * - Returns raw landmarks + derived anchors needed for jewellery placement
- */
+
 export class FaceTracker {
   constructor() {
     this._landmarker = null;
     this._ready = false;
-    // Persist the last successfully decoded transformation matrix
-    // so a single bad frame doesn't reset the head pose to identity.
+
     this._lastGoodMatrix = null;
   }
 
@@ -111,7 +106,7 @@ export class FaceTracker {
   /**
    * Detect landmarks for the current video frame.
    * @param {HTMLVideoElement} video
-   * @param {number} nowMs High-resolution timestamp (e.g. `performance.now()`)
+   * @param {number} nowMs 
    */
   detect(video, nowMs) {
     if (!this._landmarker) return null;
@@ -120,23 +115,21 @@ export class FaceTracker {
     const faceLandmarks = mpResult.faceLandmarks?.[0];
     if (!faceLandmarks || faceLandmarks.length === 0) return null;
 
-    // Derived anchors (normalized [0..1] coords in image space).
+
     const chin = findChin(faceLandmarks);
 
-    // NOTE: Earrings should NOT attach to a single landmark.
-    // We keep these as legacy convenience points (used only as fallbacks elsewhere).
-    // Indices 172/397 are the lower jaw near the earlobe (anatomically correct).
+
     const leftEarIdx = 172;
     const rightEarIdx = 397;
 
-    // Jawline points (approx): use mesh indices when available.
+
     const jawLeftIdx = 172;
     const jawRightIdx = 397;
 
     const leftEarFixed = landmarkAt(faceLandmarks, leftEarIdx);
     const rightEarFixed = landmarkAt(faceLandmarks, rightEarIdx);
 
-    // Fallback: approximate by searching extremes in a mid-to-lower band.
+
     const { left: leftEarCandidate, right: rightEarCandidate } = findExtremes(faceLandmarks, {
       minY: 0.25,
       maxY: 0.82,
@@ -147,7 +140,7 @@ export class FaceTracker {
     const leftEar = leftEarFixed ?? leftEarCandidate ?? { x: 0.2, y: 0.55, z: 0 };
     const rightEar = rightEarFixed ?? rightEarCandidate ?? { x: 0.8, y: 0.55, z: 0 };
 
-    // Jawline approximation: prefer fixed indices; fallback to extremes.
+
     const jawLeftFixed = landmarkAt(faceLandmarks, jawLeftIdx);
     const jawRightFixed = landmarkAt(faceLandmarks, jawRightIdx);
 
@@ -167,7 +160,7 @@ export class FaceTracker {
       chin,
     ]);
 
-    // Neck approximation: below chin, centered near jaw mid.
+
     const neck = {
       x: clamp01(jawMid.x),
       y: clamp01(chin.y + 0.12),
@@ -175,14 +168,14 @@ export class FaceTracker {
     };
 
     const facialMatrix = mpResult.facialTransformationMatrixes?.[0]?.data ?? null;
-    // Use last known-good matrix if this frame returned nothing (avoids identity-quat reset)
+
     const resolvedMatrix = facialMatrix ?? this._lastGoodMatrix;
     if (facialMatrix) this._lastGoodMatrix = facialMatrix;
 
     return {
       landmarks: faceLandmarks,
       poseMatrix: resolvedMatrix,
-      // Legacy points (do not use as primary earring attachment).
+
       leftEar,
       rightEar,
       jawLeft: jawLeft ?? leftEar,
@@ -196,7 +189,7 @@ export class FaceTracker {
     try {
       this._landmarker?.close();
     } catch {
-      // ignore
+
     }
     this._landmarker = null;
     this._ready = false;

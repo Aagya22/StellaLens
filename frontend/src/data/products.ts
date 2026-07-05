@@ -19,7 +19,7 @@ export const PRODUCTS: Product[] = [
     description: "Exquisite drop earrings handcrafted in 24k gold, showcasing a brilliant-cut Ruby stud and a stunning Tanzanite teardrop, surrounded by a pavé halo of diamonds.",
     modelPath: "/models/earrings/diamond_earrings.glb",
     arEnabled: true,
-    image: "/models/earrings/diamond_thumb.jpg", // We can use fallbacks or placeholders
+    image: "/images/earrings1.png",
     customizeColors: true
   },
   {
@@ -30,7 +30,7 @@ export const PRODUCTS: Product[] = [
     description: "Classic huggie hoop earrings forged from solid 18k yellow gold, featuring a high-polish mirror finish and a lightweight, comfort-fit design.",
     modelPath: "/models/earrings/earring_gold_hoopp.glb",
     arEnabled: true,
-    image: "/models/earrings/hoop_thumb.jpg"
+    image: "/images/earrings2.png"
   },
   {
     id: "necklace_gold",
@@ -40,6 +40,6 @@ export const PRODUCTS: Product[] = [
     description: "A premium solid gold statement collar, featuring dynamic articulation that rests perfectly on the neck. Masterfully hand-carved in 22k yellow gold.",
     modelPath: "/models/necklaces/necklace_gold.glb",
     arEnabled: true,
-    image: "/models/necklaces/necklace_thumb.jpg"
+    image: "/images/necklace1.png"
   }
 ];

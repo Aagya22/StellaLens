@@ -11,10 +11,7 @@ function rad2deg(r) {
   return (r * 180) / Math.PI;
 }
 
-/**
- * Estimate head pose from MediaPipe facialTransformationMatrix.
- * Returns position, yaw/pitch/roll in radians + degrees, and a quaternion.
- */
+
 export function estimateHeadPose(poseMatrixArray) {
   if (!poseMatrixArray || poseMatrixArray.length !== 16) {
     return {
@@ -60,9 +57,7 @@ export function estimateHeadPose(poseMatrixArray) {
   };
 }
 
-/**
- * Damp pose to reduce over-rotation for jewellery.
- */
+
 export function dampHeadPoseQuaternion(headPoseQuat, { yaw = 0.7, pitch = 0.25, roll = 0.85 } = {}) {
   const e = new THREE.Euler().setFromQuaternion(headPoseQuat, "YXZ");
   e.x *= pitch;
