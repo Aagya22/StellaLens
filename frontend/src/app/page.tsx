@@ -1,436 +1,1063 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { PRODUCTS, Product } from '@/data/products';
 import ARView from '@/components/ARView';
 import OrderModal from '@/components/OrderModal';
+import ModelViewer from '@/components/ModelViewer';
 
 type Tab = 'home' | 'jewelry' | 'about';
 
+/* ─── Arrow SVG ─── */
+const ArrowRight = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size * 0.55} viewBox="0 0 13.6 7.5" fill="currentColor">
+    <polygon points="9.9 0 9.4 .5 12.3 3.4 .7 3.4 .7 .2 0 .2 0 4.1 12.3 4.1 9.4 7 9.9 7.5 13.6 3.8 9.9 0" />
+  </svg>
+);
+
+/* ─── Four-point star glyph ─── */
+const Star = ({ size = 10, color = 'var(--gold)' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true">
+    <path d="M12 0c.7 6.4 5.1 11 12 12-6.9 1-11.3 5.6-12 12-.7-6.4-5.1-11-12-12 6.9-1 11.3-5.6 12-12z" />
+  </svg>
+);
+
+/* ─── Corner marks decoration ─── */
+const CornerMarks = ({ color = 'rgba(255,255,255,0.18)' }: { color?: string }) => (
+  <>
+    <div className="absolute top-3 left-3 w-5 h-5 pointer-events-none" style={{ borderTop: `1px solid ${color}`, borderLeft: `1px solid ${color}` }} />
+    <div className="absolute top-3 right-3 w-5 h-5 pointer-events-none" style={{ borderTop: `1px solid ${color}`, borderRight: `1px solid ${color}` }} />
+    <div className="absolute bottom-3 left-3 w-5 h-5 pointer-events-none" style={{ borderBottom: `1px solid ${color}`, borderLeft: `1px solid ${color}` }} />
+    <div className="absolute bottom-3 right-3 w-5 h-5 pointer-events-none" style={{ borderBottom: `1px solid ${color}`, borderRight: `1px solid ${color}` }} />
+  </>
+);
+
+/* ─── Scroll-animation hook using IntersectionObserver ─── */
+function useScrollAnimation() {
+  const observe = useCallback(() => {
+    const elements = document.querySelectorAll('[data-animate]');
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+    );
+    elements.forEach((el) => observer.observe(el));
+    return observer;
+  }, []);
+
+  return observe;
+}
+
+const COLLECTIONS = [
+  {
+    id: 'earrings',
+    label: 'From $650',
+    title: 'Earrings',
+    about: 'The first thing anyone notices. Faceted rubies and tanzanite teardrops ringed in pavé diamonds, and mirror-polished hoops in solid gold — every pair made to order in 18k or 24k.',
+    modelPath: '/models/earrings/astraea_diamond_drops.glb',
+    image: '/images/earrings1.png',
+    available: true,
+  },
+  {
+    id: 'necklaces',
+    label: 'From $1,150',
+    title: 'Necklaces',
+    about: 'Statement collars hand-carved in solid 22k yellow gold, hand-knotted pearl strands, and lockets on fine chains — weighted to rest exactly where they should.',
+    modelPath: '/models/necklaces/pleiades_pearl_strand.glb',
+    image: '/images/necklace1.png',
+    available: true,
+  },
+  {
+    id: 'rings',
+    label: 'From $1,600',
+    title: 'Rings',
+    about: 'Solitaires and pavé bands, made to measure for your hand — each one cast as a single piece and signed in gold.',
+    modelPath: '/models/rings/rosanna_pave_band.glb',
+    image: '/images/ring1.png',
+    available: true,
+  },
+  {
+    id: 'bracelets',
+    label: 'From $980',
+    title: 'Bracelets',
+    about: 'Chain and woven bracelets in solid gold, sized to your wrist and finished with a hand-polished clasp.',
+    modelPath: '/models/bracelets/callisto_chain.glb',
+    image: '/images/bracelet1.png',
+    available: true,
+  },
+] as const;
+
 export default function Home() {
+  /* ── URL hash-based tab persistence ── */
   const [activeTab, setActiveTab] = useState<Tab>('home');
+
+  useEffect(() => {
+    const readHash = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (hash === 'jewelry' || hash === 'about' || hash === 'home' || hash === '') {
+        setActiveTab(hash === '' ? 'home' : (hash as Tab));
+      }
+    };
+    readHash();
+    window.addEventListener('hashchange', readHash);
+    return () => window.removeEventListener('hashchange', readHash);
+  }, []);
+
+  const goToTab = (tab: Tab) => {
+    setActiveTab(tab);
+    window.location.hash = tab === 'home' ? '' : tab;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  /* ── Scroll animations ── */
+  const observe = useScrollAnimation();
+  useEffect(() => {
+    const observer = observe();
+    return () => observer.disconnect();
+  }, [activeTab, observe]);
+
+  /* ── Other state ── */
   const [activeArProduct, setActiveArProduct] = useState<Product | null>(null);
   const [orderData, setOrderData] = useState<any | null>(null);
-  
-  // Jewelry page search & filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'earrings' | 'necklaces'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | Product['category']>('all');
+  const [collectionIndex, setCollectionIndex] = useState(0);
+  const activeCollection = COLLECTIONS[collectionIndex];
 
-  const handleOpenOrder = (data: any) => {
-    setOrderData(data);
-  };
-
-  const getProductBackdrop = (id: string) => {
-    if (id === 'earring_diamond') {
-      return 'from-[#FDFBF7] via-[#F3EFE9] to-[#E6DEC9]/30';
-    } else if (id === 'earring_gold_hoop') {
-      return 'from-[#FFFDF9] via-[#FAF6EE] to-[#EFE2C5]/30';
-    } else {
-      return 'from-[#FAF8F5] via-[#EFEBE4] to-[#DFD5C6]/35';
-    }
-  };
-
-  // Filter jewelry catalog
   const filteredProducts = PRODUCTS.filter((p) => {
     const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch =
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
   return (
-    <div className="min-h-screen w-full bg-[#FCF9F8] text-[#1a1a1a] font-sans flex flex-col items-center justify-between overflow-x-hidden selection:bg-[#5F3041]/20 selection:text-[#5F3041]">
+    <div
+      className="min-h-screen w-full flex flex-col overflow-x-hidden"
+      style={{ background: 'var(--black)', color: 'var(--white)', fontFamily: "var(--font-space), 'Space Grotesk', sans-serif" }}
+    >
 
-      {/* 2. Swarovski-inspired Luxury Navigation Header */}
-      <header className="sticky top-0 z-40 bg-[#FCF9F8]/95 backdrop-blur-md border-b border-[#5F3041]/10 px-6 sm:px-12 py-5 shadow-sm transition-all duration-300 w-full flex justify-center">
-        <div className="max-w-7xl w-full flex flex-col items-center gap-4">
-          
-          {/* Logo Center */}
-          <div className="flex items-center justify-between w-full relative h-10">
-            {/* Left spacing for alignment */}
-            <div className="w-24 hidden md:block" />
-            
-            {/* Brand Logo */}
-            <button 
-              onClick={() => setActiveTab('home')}
-              className="absolute left-1/2 -translate-x-1/2 text-2xl sm:text-3xl font-light tracking-[0.3em] text-[#1a1a1a] hover:opacity-90 transition-opacity font-sans focus:outline-none cursor-pointer whitespace-nowrap"
-            >
-              STELLA<span className="font-semibold text-[#5F3041]">LENS</span>
-            </button>
-            
-            {/* Quick Actions (Wishlist / Bag Icons) */}
-            <div className="flex items-center gap-4 text-[#5F3041] relative z-10">
-              <button className="hover:opacity-75 transition-opacity" title="Wishlist">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </button>
-              <button className="hover:opacity-75 transition-opacity relative" title="Shopping Bag">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-                {orderData && (
-                  <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-amber-500 rounded-full text-[8px] font-bold text-black flex items-center justify-center animate-ping" />
-                )}
-              </button>
-            </div>
-          </div>
+      {/* ══════════════════════════════════════
+          NAVIGATION — always black
+      ══════════════════════════════════════ */}
+      <header
+        className="sticky top-0 z-40 w-full"
+        style={{
+          background: 'rgba(10,10,10,0.96)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-6 sm:px-12 py-5 flex items-center justify-between relative">
 
-          {/* Navigation Links */}
-          <nav className="flex gap-8 border-t border-[#5F3041]/5 w-full justify-center pt-3 mt-1">
+          {/* Left — desktop nav */}
+          <nav className="hidden md:flex items-center gap-8">
             {(['home', 'jewelry', 'about'] as const).map((tab) => {
               const isActive = activeTab === tab;
               return (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`text-xs font-semibold tracking-[0.2em] uppercase py-1 border-b-2 transition-all duration-300 focus:outline-none cursor-pointer ${
-                    isActive 
-                      ? 'border-[#5F3041] text-[#5F3041] font-bold scale-105' 
-                      : 'border-transparent text-slate-500 hover:text-[#5F3041]'
-                  }`}
+                  onClick={() => goToTab(tab)}
+                  className="underline-slide cursor-pointer"
+                  style={{
+                    background: 'none', border: 'none',
+                    fontSize: '10px', letterSpacing: '0.22em',
+                    textTransform: 'uppercase',
+                    fontWeight: isActive ? 600 : 400,
+                    color: isActive ? 'var(--white)' : 'var(--white-fade)',
+                    transition: 'color 0.25s',
+                    padding: '4px 0',
+                    fontFamily: "var(--font-space), sans-serif",
+                  }}
                 >
-                  {tab === 'about' ? 'about us' : tab}
+                  {tab === 'about' ? 'About Us' : tab}
                 </button>
               );
             })}
           </nav>
+
+          {/* Center — Logo */}
+          <button
+            onClick={() => goToTab('home')}
+            className="cursor-pointer absolute left-1/2 -translate-x-1/2"
+            style={{
+              background: 'none', border: 'none',
+              fontSize: '20px', letterSpacing: '0.35em',
+              fontWeight: 300, color: 'var(--white)',
+              fontFamily: "var(--font-space), sans-serif",
+              textTransform: 'uppercase', whiteSpace: 'nowrap',
+            }}
+          >
+            <span className="flex items-center gap-1.5">
+              STELLA<Star size={8} />LENS
+            </span>
+          </button>
+
+          {/* Right — icons */}
+          <div className="flex items-center gap-5 ml-auto">
+            <button
+              className="cursor-pointer"
+              style={{ background: 'none', border: 'none', color: 'var(--white-fade)', lineHeight: 0 }}
+              title="Search"
+            >
+              <svg width="15" height="15" viewBox="0 0 94 94" fill="currentColor">
+                <path d="M94,89.8L79,74.8c6.9-7.9,11.1-18.3,11.1-29.6C90.1,20.2,69.8,0,44.9,0S-0.2,20.2-0.2,45.2s20.3,45.2,45.1,45.2c11.4,0,21.7-4.2,29.7-11.2l15,15,4.4-4.4ZM44.9,84.2c-21.5,0-39-17.5-39-39s17.5-39,39-39,39,17.5,39,39-17.5,39-39,39Z" />
+              </svg>
+            </button>
+            <button
+              className="cursor-pointer relative"
+              style={{ background: 'none', border: 'none', color: 'var(--white-fade)', lineHeight: 0 }}
+              title="Cart"
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              {orderData && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full" style={{ background: 'var(--gold)' }} />
+              )}
+            </button>
+            {/* Mobile hamburger */}
+            <div className="flex md:hidden flex-col gap-1.5 cursor-pointer" style={{ lineHeight: 0 }}>
+              <span className="block w-5 h-px" style={{ background: 'var(--white)' }} />
+              <span className="block w-3 h-px" style={{ background: 'var(--white)' }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile nav row */}
+        <div className="md:hidden flex justify-center gap-8 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {(['home', 'jewelry', 'about'] as const).map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => goToTab(tab)}
+                className="cursor-pointer"
+                style={{
+                  background: 'none', border: 'none',
+                  borderBottom: isActive ? '1px solid var(--white)' : '1px solid transparent',
+                  fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase',
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? 'var(--white)' : 'var(--white-fade)',
+                  fontFamily: "var(--font-space), sans-serif",
+                  paddingBottom: '2px',
+                }}
+              >
+                {tab === 'about' ? 'About' : tab}
+              </button>
+            );
+          })}
         </div>
       </header>
 
-      {/* Decorative ambient glows */}
-      <div className="absolute top-[200px] right-0 w-[500px] h-[500px] rounded-full bg-[#5F3041]/3 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[200px] left-[-100px] w-[500px] h-[500px] rounded-full bg-amber-500/2 blur-[100px] pointer-events-none" />
 
-      {/* 3. Main Content Switching */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-6 sm:px-12 py-10 md:py-16 flex flex-col justify-center">
-        
+      {/* ══════════════════════════════════════
+          MAIN
+      ══════════════════════════════════════ */}
+      <main className="flex-1 w-full">
+
         {/* ==================== HOME TAB ==================== */}
         {activeTab === 'home' && (
-          <div className="space-y-24 fade-in">
-            {/* Hero Banner Section */}
-            <section className="relative w-full rounded-3xl overflow-hidden border border-[#5F3041]/10 bg-gradient-to-br from-[#FDFAF7] via-[#F5F0EB]/90 to-[#FDFAF7] p-8 sm:p-12 lg:p-16 min-h-[550px] shadow-sm flex flex-col justify-center">
-              <div className="absolute inset-0 opacity-[0.02] pointer-events-none flex items-center justify-end pr-24">
-                <svg width="400" height="400" viewBox="0 0 100 100" fill="none" stroke="#5F3041" strokeWidth="0.5">
-                  <circle cx="50" cy="50" r="40" />
-                  <polygon points="50,15 85,50 50,85 15,50" />
-                  <path d="M50 10 L50 90" />
-                </svg>
-              </div>
+          <>
+            {/* ── SECTION 1: HERO — BLACK ── */}
+            <section
+              className="relative w-full flex flex-col items-center justify-center text-center overflow-hidden"
+              style={{
+                minHeight: '90vh',
+                background: 'radial-gradient(ellipse at 50% 130%, #141b33 0%, var(--black) 62%)',
+                padding: '100px 24px 120px',
+              }}
+            >
+              {/* Starfield */}
+              <div className="night-stars" />
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10 w-full">
-                {/* Hero Text Content */}
-                <div className="lg:col-span-6 space-y-6 flex flex-col items-center text-center justify-center">
-                  <span className="text-[10px] tracking-[0.3em] font-bold text-[#5F3041] uppercase flex items-center gap-2">
-                    ✦ NEW CELESTIAL ARRIVALS
+              {/* Gold nebula glow */}
+              <div className="absolute pointer-events-none" style={{
+                top: '38%', left: '50%',
+                transform: 'translate(-50%,-50%)',
+                width: '760px', height: '760px',
+                background: 'radial-gradient(circle, rgba(201,168,112,0.09) 0%, transparent 65%)',
+                borderRadius: '50%',
+              }} />
+
+              <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center gap-7">
+                <span className="label-tag flex items-center gap-2" data-animate data-animate-delay="1">
+                  <Star size={9} /> The MoonStella Atelier
+                </span>
+
+                <h1
+                  className="font-editorial"
+                  data-animate
+                  data-animate-delay="2"
+                  style={{
+                    fontSize: 'clamp(50px, 9vw, 96px)',
+                    fontWeight: 300,
+                    lineHeight: 1.06,
+                    letterSpacing: '0.02em',
+                    color: 'var(--white)',
+                  }}
+                >
+                  <span style={{ fontStyle: 'italic' }}>Written in the stars.</span><br />
+                  <span style={{ fontWeight: 600, letterSpacing: '0.06em' }}>
+                    Worn in seconds.
                   </span>
-                  <h1 className="text-4xl sm:text-5xl md:text-6xl font-light tracking-wide leading-tight text-[#2E0820] font-serif">
-                    Astraea Diamonds<br />
-                    <span className="font-serif italic font-medium text-[#5F3041]">Forged in Light.</span>
-                  </h1>
-                  <p className="text-slate-600 text-sm sm:text-base font-light leading-relaxed max-w-lg mx-auto">
-                    Explore our luxury fitting room. Select standard designs or create your bespoke configurations with custom Rubies and Tanzanites, calibrated to fit you perfectly.
-                  </p>
-                  <div className="pt-4">
-                    <button
-                      onClick={() => setActiveTab('jewelry')}
-                      className="px-8 py-3.5 bg-[#5F3041] hover:bg-[#4A2231] text-white text-xs tracking-widest font-bold uppercase rounded-xl transition-all shadow-md hover:shadow-lg cursor-pointer"
-                    >
-                      Enter Showroom
-                    </button>
-                  </div>
-                </div>
+                </h1>
 
-                {/* Jewelry Collage */}
-                <div className="lg:col-span-6 relative w-full h-[400px] md:h-[450px] mt-8 lg:mt-0 flex items-center justify-center">
-                  {/* Image 1: Diamond Earrings */}
-                  <div className="absolute top-0 left-4 md:left-12 w-36 h-36 sm:w-40 sm:h-40 md:w-52 md:h-52 rounded-2xl overflow-hidden border border-[#5F3041]/10 bg-white shadow-md rotate-[-6deg] hover:rotate-0 hover:scale-105 hover:z-30 transition-all duration-300 cursor-pointer">
-                    <img src="/images/earrings1.png" alt="Diamond Earrings" className="w-full h-full object-cover" />
-                  </div>
-                  {/* Image 2: Gold Hoops */}
-                  <div className="absolute top-6 right-4 md:right-12 w-32 h-32 sm:w-36 sm:h-36 md:w-44 md:h-44 rounded-2xl overflow-hidden border border-[#5F3041]/10 bg-white shadow-md rotate-[4deg] hover:rotate-0 hover:scale-105 hover:z-30 transition-all duration-300 cursor-pointer">
-                    <img src="/images/earrings2.png" alt="Gold Hoops" className="w-full h-full object-cover" />
-                  </div>
-                  {/* Image 3: Celestial Chain */}
-                  <div className="absolute bottom-4 left-6 md:left-16 w-32 h-32 sm:w-36 sm:h-36 md:w-48 md:h-48 rounded-2xl overflow-hidden border border-[#5F3041]/10 bg-white shadow-md rotate-[3deg] hover:rotate-0 hover:scale-105 hover:z-30 transition-all duration-300 cursor-pointer">
-                    <img src="/images/necklace1.png" alt="Celestial Chain" className="w-full h-full object-cover" />
-                  </div>
-                  {/* Image 4: Diamond Ring */}
-                  <div className="absolute bottom-0 right-6 md:right-16 w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-2xl overflow-hidden border border-[#5F3041]/10 bg-white shadow-md rotate-[-4deg] hover:rotate-0 hover:scale-105 hover:z-30 transition-all duration-300 cursor-pointer">
-                    <img src="/images/ring1.png" alt="Diamond Ring" className="w-full h-full object-cover" />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Featured Categories (Swarovski style grid banner) */}
-            <section className="space-y-8">
-              <div className="text-center space-y-2">
-                <p className="text-[9px] tracking-[0.25em] font-bold text-[#5F3041] uppercase">Browse the Atelier</p>
-                <h2 className="text-3xl font-light font-serif text-[#2E0820]">Shop by Category</h2>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Category 1: Earrings */}
-                <div className="group relative rounded-2xl overflow-hidden border border-[#5F3041]/10 bg-gradient-to-tr from-[#FDFAF7] to-[#EADEC9]/20 p-8 sm:p-12 flex flex-col justify-between items-center text-center min-h-[350px] shadow-sm hover:shadow-lg transition-all duration-300">
-                  <div className="absolute inset-0 opacity-[0.02] pointer-events-none flex items-center justify-center">
-                    <svg width="250" height="250" viewBox="0 0 100 100" fill="none" stroke="#5F3041" strokeWidth="0.5">
-                      <polygon points="50,10 90,50 50,90 10,50" />
-                    </svg>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] tracking-[0.2em] font-bold text-[#5F3041] uppercase">Sparkling Accents</span>
-                    <h3 className="text-2xl font-light font-serif mt-2 text-[#2E0820] group-hover:text-[#5F3041] transition-colors">Fine Earrings</h3>
-                    <p className="text-xs text-slate-500 font-light mt-3 max-w-xs leading-relaxed mx-auto">
-                      Calibrated drop styles and mirror-finish hoops crafted in premium solid yellow and white gold.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSelectedCategory('earrings');
-                      setActiveTab('jewelry');
-                    }}
-                    className="mt-6 text-xs font-semibold tracking-wider text-[#5F3041] hover:text-[#4A2231] transition-colors underline underline-offset-4 uppercase"
-                  >
-                    View Collection →
-                  </button>
-                </div>
-
-                {/* Category 2: Necklaces */}
-                <div className="group relative rounded-2xl overflow-hidden border border-[#5F3041]/10 bg-gradient-to-tr from-[#FDFAF7] to-[#DFD5C6]/30 p-8 sm:p-12 flex flex-col justify-between items-center text-center min-h-[350px] shadow-sm hover:shadow-lg transition-all duration-300">
-                  <div className="absolute inset-0 opacity-[0.02] pointer-events-none flex items-center justify-center">
-                    <svg width="250" height="250" viewBox="0 0 100 100" fill="none" stroke="#5F3041" strokeWidth="0.5">
-                      <circle cx="50" cy="50" r="40" />
-                    </svg>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] tracking-[0.2em] font-bold text-[#5F3041] uppercase">Statement Collars</span>
-                    <h3 className="text-2xl font-light font-serif mt-2 text-[#2E0820] group-hover:text-[#5F3041] transition-colors">Articulated Necklaces</h3>
-                    <p className="text-xs text-slate-500 font-light mt-3 max-w-xs leading-relaxed mx-auto">
-                      Fluid curves designed to sit gracefully on the neck. Artisanally carved and polished.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSelectedCategory('necklaces');
-                      setActiveTab('jewelry');
-                    }}
-                    className="mt-6 text-xs font-semibold tracking-wider text-[#5F3041] hover:text-[#4A2231] transition-colors underline underline-offset-4 uppercase"
-                  >
-                    View Collection →
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Trending Item Spotlight */}
-            <section className="bg-[#FDFAF7] border border-[#5F3041]/10 rounded-3xl p-8 sm:p-16 flex flex-col items-center text-center gap-10 shadow-sm max-w-4xl mx-auto">
-              <div className="space-y-6 flex flex-col items-center">
-                <span className="text-[9px] tracking-[0.3em] font-bold text-amber-600 uppercase block">✦ TRENDING NOW</span>
-                <h3 className="text-3xl font-light font-serif text-[#2E0820]">Astraea Diamond Drops</h3>
-                <p className="text-sm text-slate-600 font-light leading-relaxed max-w-xl mx-auto">
-                  Our signature design showcasing a vivid Ruby stud matching with a rich Tanzanite drops teardrop, set in a gold halo of micro diamonds.
+                <p
+                  data-animate
+                  data-animate-delay="3"
+                  style={{
+                    fontSize: '14px', fontWeight: 300,
+                    color: 'var(--white-fade)',
+                    letterSpacing: '0.04em', lineHeight: 1.85,
+                    maxWidth: '480px',
+                  }}
+                >
+                  Every StellaLens piece is named for the night sky and made to order in solid gold.
+                  Open your camera, see it on you — live — then choose your stones and commission it.
                 </p>
-                <div className="flex justify-center pt-2">
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 mt-2" data-animate data-animate-delay="4">
+                  <button className="btn-fill-solid" onClick={() => goToTab('jewelry')}>
+                    Explore the Collection
+                    <ArrowRight />
+                  </button>
                   <button
+                    className="btn-fill"
                     onClick={() => {
                       const ast = PRODUCTS.find(p => p.id === 'earring_diamond');
                       if (ast) setActiveArProduct(ast);
                     }}
-                    className="px-6 py-3 bg-[#5F3041] hover:bg-[#4A2231] text-white text-xs tracking-widest font-bold uppercase rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     Try On Live
                   </button>
                 </div>
               </div>
-              <div className="w-full max-w-[320px] aspect-square rounded-2xl border border-[#5F3041]/10 bg-white flex items-center justify-center relative overflow-hidden shadow-md group hover:shadow-xl transition-all duration-300">
-                <img src="/images/earrings1.png" alt="Astraea Diamond Drops" className="w-full h-full object-cover" />
+
+              {/* Scroll line */}
+              <div
+                className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+                data-animate="fade"
+                data-animate-delay="5"
+                style={{ opacity: 0 }}
+              >
+                <span className="label-white" style={{ fontSize: '8px' }}>Scroll</span>
+                <div style={{
+                  width: '1px', height: '50px',
+                  background: 'linear-gradient(to bottom, var(--gold-fade), transparent)',
+                }} />
               </div>
             </section>
-          </div>
+
+            {/* ── SECTION 2: SHOP BY COLLECTION — CREAM ── */}
+            <section style={{ background: 'var(--cream)', color: 'var(--cream-text)' }}>
+              <div className="max-w-7xl mx-auto px-6 sm:px-12 py-24 flex flex-col items-center gap-14">
+
+                {/* Header */}
+                <div className="flex flex-col items-center text-center gap-3" data-animate>
+                  <span className="label-tag flex items-center gap-2 justify-center">
+                    <Star size={9} /> The Collections
+                  </span>
+                  <h2
+                    className="font-editorial"
+                    style={{
+                      fontSize: 'clamp(36px, 5vw, 58px)',
+                      fontWeight: 300, letterSpacing: '0.03em',
+                      color: 'var(--cream-text)',
+                    }}
+                  >
+                    Named for the night sky
+                  </h2>
+                  <p style={{
+                    fontSize: '13px', fontWeight: 300,
+                    color: 'var(--cream-muted)', lineHeight: 1.8, maxWidth: '440px',
+                  }}>
+                    Explore each collection in three dimensions — drag the piece to turn it.
+                  </p>
+                </div>
+
+                {/* Collection coverflow slider */}
+                <div className="w-full flex flex-col items-center gap-10" data-animate>
+
+                  {/* Stage */}
+                  <div
+                    className="relative w-full overflow-hidden"
+                    style={{
+                      background: 'radial-gradient(ellipse at 50% 130%, #141b33 0%, var(--black) 65%)',
+                      border: '1px solid var(--cream-border)',
+                      height: 'min(110vw, 520px)',
+                    }}
+                  >
+                    <div className="night-stars" />
+
+                    {COLLECTIONS.map((col, i) => {
+                      const n = COLLECTIONS.length;
+                      let off = (i - collectionIndex + n) % n;
+                      if (off > n / 2) off -= n; // shortest wrap: -1, 0, 1, (2 = hidden behind)
+                      const isCenter = off === 0;
+                      const hidden = Math.abs(off) > 1;
+                      return (
+                        <div
+                          key={col.id}
+                          className="absolute top-1/2 left-1/2 overflow-hidden"
+                          style={{
+                            width: 'min(62%, 330px)', aspectRatio: '3/4',
+                            transform: `translate(-50%, -50%) translateX(${off * 72}%) scale(${isCenter ? 1 : 0.76})`,
+                            transition: 'transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.45s, border-color 0.45s',
+                            opacity: hidden ? 0 : isCenter ? 1 : 0.45,
+                            zIndex: isCenter ? 3 : hidden ? 0 : 1,
+                            pointerEvents: hidden ? 'none' : 'auto',
+                            background: 'linear-gradient(180deg, rgba(20,27,51,0.9) 0%, rgba(10,13,23,0.95) 100%)',
+                            border: isCenter ? '1px solid rgba(201,168,112,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                          }}
+                        >
+                          {!hidden && (
+                            <div className="absolute inset-0">
+                              <ModelViewer modelPath={col.modelPath} fallbackImage={col.image} />
+                            </div>
+                          )}
+                          {/* Card caption */}
+                          <div
+                            className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-1 pointer-events-none"
+                            style={{
+                              padding: '28px 12px 16px',
+                              background: 'linear-gradient(to top, rgba(10,13,23,0.85), transparent)',
+                            }}
+                          >
+                            <span
+                              className="font-editorial"
+                              style={{ fontSize: '20px', fontWeight: 300, letterSpacing: '0.05em', color: 'var(--white)' }}
+                            >
+                              {col.title}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '8px', letterSpacing: '0.25em', textTransform: 'uppercase',
+                                color: 'var(--gold)', fontFamily: "var(--font-space), sans-serif",
+                              }}
+                            >
+                              {col.label}
+                            </span>
+                          </div>
+                          {/* Side cards: click to focus */}
+                          {!isCenter && !hidden && (
+                            <button
+                              aria-label={`Show ${col.title}`}
+                              className="absolute inset-0 cursor-pointer"
+                              style={{ background: 'transparent', border: 'none', zIndex: 2 }}
+                              onClick={() => setCollectionIndex(i)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Arrows */}
+                    <button
+                      aria-label="Previous collection"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 cursor-pointer flex items-center justify-center"
+                      style={{
+                        zIndex: 4, width: '40px', height: '40px',
+                        background: 'rgba(10,13,23,0.6)', backdropFilter: 'blur(6px)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        color: 'var(--white)', transition: 'border-color 0.25s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--gold)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)')}
+                      onClick={() => setCollectionIndex(i => (i - 1 + COLLECTIONS.length) % COLLECTIONS.length)}
+                    >
+                      <span style={{ transform: 'scaleX(-1)', display: 'inline-flex' }}><ArrowRight size={12} /></span>
+                    </button>
+                    <button
+                      aria-label="Next collection"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer flex items-center justify-center"
+                      style={{
+                        zIndex: 4, width: '40px', height: '40px',
+                        background: 'rgba(10,13,23,0.6)', backdropFilter: 'blur(6px)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        color: 'var(--white)', transition: 'border-color 0.25s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--gold)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)')}
+                      onClick={() => setCollectionIndex(i => (i + 1) % COLLECTIONS.length)}
+                    >
+                      <ArrowRight size={12} />
+                    </button>
+
+                    {/* Drag hint */}
+                    <span
+                      className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none"
+                      style={{
+                        zIndex: 4,
+                        fontSize: '8px', letterSpacing: '0.25em', textTransform: 'uppercase',
+                        color: 'var(--white-fade)',
+                        fontFamily: "var(--font-space), sans-serif",
+                      }}
+                    >
+                      Drag to rotate
+                    </span>
+                  </div>
+
+                  {/* Active collection text */}
+                  <div
+                    key={activeCollection.id}
+                    className="slide-fade flex flex-col items-center text-center gap-4 max-w-xl"
+                  >
+                    <span
+                      style={{
+                        fontSize: '10px', letterSpacing: '0.25em', textTransform: 'uppercase',
+                        color: 'var(--gold)',
+                        fontFamily: "var(--font-space), sans-serif", fontWeight: 500,
+                      }}
+                    >
+                      {activeCollection.label}
+                    </span>
+                    <h3
+                      className="font-editorial"
+                      style={{
+                        fontSize: 'clamp(34px, 4.5vw, 50px)', fontWeight: 300,
+                        letterSpacing: '0.03em', color: 'var(--cream-text)', lineHeight: 1.05,
+                      }}
+                    >
+                      {activeCollection.title}
+                    </h3>
+                    <p style={{
+                      fontSize: '13px', color: 'var(--cream-muted)',
+                      fontWeight: 300, lineHeight: 1.85, maxWidth: '440px',
+                    }}>
+                      {activeCollection.about}
+                    </p>
+                    <button
+                      className="btn-fill-cream-solid"
+                      style={{ marginTop: '4px' }}
+                      onClick={() => goToTab('jewelry')}
+                    >
+                      View Collection
+                      <ArrowRight />
+                    </button>
+                  </div>
+
+                  {/* Category tabs */}
+                  <div className="flex flex-wrap justify-center gap-8">
+                    {COLLECTIONS.map((c, i) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setCollectionIndex(i)}
+                        className="underline-slide cursor-pointer"
+                        style={{
+                          background: 'none', border: 'none', padding: '2px 0',
+                          fontSize: '10px', letterSpacing: '0.22em', textTransform: 'uppercase',
+                          fontFamily: "var(--font-space), sans-serif",
+                          fontWeight: i === collectionIndex ? 600 : 400,
+                          color: i === collectionIndex ? 'var(--cream-text)' : 'var(--cream-muted)',
+                          borderBottom: i === collectionIndex ? '1px solid var(--gold)' : '1px solid transparent',
+                          transition: 'color 0.25s',
+                        }}
+                      >
+                        {c.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ── SECTION 3: TRENDING SPOTLIGHT — BLACK ── */}
+            <section style={{ background: 'var(--black)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="max-w-7xl mx-auto px-6 sm:px-12 py-24 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+
+                {/* Text side */}
+                <div className="flex flex-col items-center text-center gap-6" data-animate>
+                  <span className="label-tag flex items-center gap-2">
+                    <Star size={9} /> This Season
+                  </span>
+                  <h2
+                    className="font-editorial"
+                    style={{
+                      fontSize: 'clamp(40px, 5vw, 66px)',
+                      fontWeight: 300, letterSpacing: '0.03em',
+                      color: 'var(--white)', lineHeight: 1.1,
+                    }}
+                  >
+                    Astraea<br />
+                    <span style={{ fontStyle: 'italic' }}>Diamond Drops</span>
+                  </h2>
+                  <p style={{
+                    fontSize: '13px', fontWeight: 300,
+                    color: 'var(--white-fade)', lineHeight: 1.85, maxWidth: '400px',
+                  }}>
+                    A brilliant-cut ruby above a tanzanite teardrop, ringed in pavé diamonds
+                    and set in 24k gold. Named for the goddess who became a constellation.
+                    Made to order — $1,250.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <button
+                      className="btn-fill-solid"
+                      onClick={() => {
+                        const ast = PRODUCTS.find(p => p.id === 'earring_diamond');
+                        if (ast) setActiveArProduct(ast);
+                      }}
+                    >
+                      Try On Live
+                    </button>
+                    <button className="btn-fill" onClick={() => goToTab('jewelry')}>
+                      All Pieces
+                    </button>
+                  </div>
+                </div>
+
+                {/* Image */}
+                <div className="relative w-full" data-animate="scale" style={{ maxWidth: '480px', margin: '0 auto' }}>
+                  <div
+                    className="relative w-full overflow-hidden"
+                    style={{
+                      aspectRatio: '1/1',
+                      border: '1px solid rgba(201,168,112,0.28)',
+                    }}
+                  >
+                    <img
+                      src="/images/earrings1.png"
+                      alt="Astraea Diamond Drops — ruby and tanzanite earrings in 24k gold"
+                      className="w-full h-full object-cover product-img"
+                    />
+                  </div>
+                  {/* Star accents */}
+                  <div className="absolute pointer-events-none" style={{ top: '-9px', right: '-9px' }}>
+                    <Star size={18} color="var(--gold)" />
+                  </div>
+                  <div className="absolute pointer-events-none" style={{ bottom: '18px', left: '-11px' }}>
+                    <Star size={11} color="var(--gold-fade)" />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ── SECTION 4: HOW IT WORKS — CREAM ── */}
+            <section style={{ background: 'var(--cream)', color: 'var(--cream-text)' }}>
+              <div className="max-w-7xl mx-auto px-6 sm:px-12 py-24 flex flex-col items-center text-center gap-12">
+                <div className="flex flex-col items-center gap-3" data-animate>
+                  <span className="label-tag flex items-center gap-2 justify-center">
+                    <Star size={9} /> How It Works
+                  </span>
+                  <h2
+                    className="font-editorial"
+                    style={{
+                      fontSize: 'clamp(34px, 5vw, 58px)',
+                      fontWeight: 300, letterSpacing: '0.03em',
+                      color: 'var(--cream-text)', maxWidth: '680px', lineHeight: 1.15,
+                    }}
+                  >
+                    The fitting room<br /><span style={{ fontStyle: 'italic' }}>is your camera.</span>
+                  </h2>
+                  <p style={{
+                    fontSize: '13px', fontWeight: 300,
+                    color: 'var(--cream-muted)', lineHeight: 1.85, maxWidth: '480px',
+                  }}>
+                    No appointment, no counter glass. StellaLens follows your features in real
+                    time, so each piece sits where it would really sit — and moves the way real
+                    jewellery moves.
+                  </p>
+                </div>
+
+                {/* Steps */}
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-3 w-full max-w-3xl"
+                  data-animate
+                  style={{
+                    borderTop: '1px solid var(--cream-border)',
+                    paddingTop: '40px',
+                    gap: '32px',
+                  }}
+                >
+                  {[
+                    { num: '01', title: 'Choose a piece', text: 'Browse the atelier and pick what catches your eye.' },
+                    { num: '02', title: 'Open your camera', text: 'See it on your ears or neck — live, moving with you.' },
+                    { num: '03', title: 'Make it yours', text: 'Choose your stones, set the size, and commission it.' },
+                  ].map(({ num, title, text }) => (
+                    <div key={num} className="flex flex-col items-center gap-3 px-2">
+                      <span
+                        className="font-editorial"
+                        style={{ fontSize: '30px', fontWeight: 300, fontStyle: 'italic', color: 'var(--gold)', letterSpacing: '0.05em' }}
+                      >
+                        {num}
+                      </span>
+                      <span style={{ fontSize: '11px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--cream-text)', fontWeight: 500 }}>
+                        {title}
+                      </span>
+                      <p style={{ fontSize: '12px', fontWeight: 300, color: 'var(--cream-muted)', lineHeight: 1.75 }}>
+                        {text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  className="btn-fill-cream-solid"
+                  data-animate
+                  onClick={() => {
+                    const ast = PRODUCTS.find(p => p.id === 'earring_diamond');
+                    if (ast) setActiveArProduct(ast);
+                  }}
+                >
+                  Start a Try-On
+                  <ArrowRight />
+                </button>
+              </div>
+            </section>
+          </>
         )}
 
         {/* ==================== JEWELRY CATALOG TAB ==================== */}
         {activeTab === 'jewelry' && (
-          <div className="space-y-12 fade-in">
-            {/* Header & Filter Controls */}
-            <div className="space-y-8 border-b border-[#5F3041]/10 pb-8">
-              <div className="text-center space-y-2">
-                <p className="text-[9px] tracking-[0.25em] font-bold text-[#5F3041] uppercase">The Atelier Collection</p>
-                <h2 className="text-3xl font-light font-serif text-[#2E0820]">Fine Jewelry Catalog</h2>
+          <section style={{ background: 'var(--black)', minHeight: '100vh' }}>
+            <div className="max-w-7xl mx-auto px-6 sm:px-12 py-16 space-y-10">
+
+              {/* Header */}
+              <div
+                className="flex flex-col items-center text-center gap-3 pb-8 mx-auto w-full"
+                data-animate
+                style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+              >
+                <span className="label-tag">The Atelier Collection</span>
+                <h2
+                  className="font-editorial"
+                  style={{
+                    fontSize: 'clamp(36px, 5vw, 60px)',
+                    fontWeight: 300, letterSpacing: '0.03em', color: 'var(--white)',
+                  }}
+                >
+                  Fine Jewelry Catalog
+                </h2>
               </div>
 
-              {/* Search and Category filters (Swarovski style) */}
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-4xl mx-auto pt-4">
-                
-                {/* Search Bar */}
-                <div className="relative w-full md:w-80">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </span>
+              {/* Search & Filter */}
+              <div
+                className="flex flex-col sm:flex-row gap-6 items-start sm:items-end justify-between"
+                data-animate
+              >
+                {/* Search */}
+                <div className="relative w-full sm:w-72">
+                  <svg
+                    className="absolute left-0 top-1/2 -translate-y-1/2"
+                    width="12" height="12" viewBox="0 0 94 94" fill="rgba(255,255,255,0.3)"
+                  >
+                    <path d="M94,89.8L79,74.8c6.9-7.9,11.1-18.3,11.1-29.6C90.1,20.2,69.8,0,44.9,0S-0.2,20.2-0.2,45.2s20.3,45.2,45.1,45.2c11.4,0,21.7-4.2,29.7-11.2l15,15,4.4-4.4ZM44.9,84.2c-21.5,0-39-17.5-39-39s17.5-39,39-39,39,17.5,39,39-17.5,39-39,39Z" />
+                  </svg>
                   <input
                     type="text"
                     placeholder="Search collection..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#5F3041]/15 rounded-xl text-xs font-light focus:border-[#5F3041] focus:ring-1 focus:ring-[#5F3041] focus:outline-none transition-all text-[#1a1a1a]"
+                    className="input-dark"
+                    style={{ paddingLeft: '22px' }}
                   />
                 </div>
 
-                {/* Category filters */}
-                <div className="flex gap-2 w-full md:w-auto justify-center md:justify-end">
-                  {(['all', 'earrings', 'necklaces'] as const).map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-5 py-2.5 rounded-full text-[10px] font-bold tracking-wider uppercase transition-all border cursor-pointer ${
-                        selectedCategory === cat
-                          ? 'bg-[#5F3041] border-transparent text-white shadow-sm'
-                          : 'bg-white/50 border-[#5F3041]/10 hover:border-[#5F3041]/30 text-slate-700'
-                      }`}
+                {/* Filter pills */}
+                <div className="flex flex-wrap gap-2">
+                  {(['all', 'earrings', 'necklaces', 'rings', 'bracelets'] as const).map((cat) => {
+                    const active = selectedCategory === cat;
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(cat)}
+                        className="cursor-pointer"
+                        style={{
+                          position: 'relative', overflow: 'hidden',
+                          background: active ? 'var(--white)' : 'transparent',
+                          color: active ? 'var(--black)' : 'var(--white-fade)',
+                          border: `1px solid ${active ? 'var(--white)' : 'rgba(255,255,255,0.2)'}`,
+                          borderRadius: 0,
+                          fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase',
+                          fontFamily: "var(--font-space), sans-serif",
+                          fontWeight: active ? 600 : 400,
+                          padding: '9px 20px',
+                          transition: 'all 0.3s',
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Product Grid */}
+              {filteredProducts.length === 0 ? (
+                <div className="text-center py-24" style={{ color: 'var(--white-fade)', fontSize: '13px', fontWeight: 300, letterSpacing: '0.1em' }}>
+                  No results found.
+                </div>
+              ) : (
+                <div
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                  style={{ gap: '1px', background: 'rgba(255,255,255,0.06)' }}
+                >
+                  {filteredProducts.map((product, i) => (
+                    <div
+                      key={product.id}
+                      className="product-card flex flex-col"
+                      data-animate
+                      data-animate-delay={String(Math.min(i + 1, 4)) as any}
+                      style={{ background: 'var(--black-card)' }}
                     >
-                      {cat}
-                    </button>
+                      {/* Live 3D model */}
+                      <div
+                        className="relative overflow-hidden"
+                        style={{
+                          aspectRatio: '1/1',
+                          background: 'radial-gradient(ellipse at 50% 130%, #141b33 0%, var(--black-soft) 70%)',
+                        }}
+                      >
+                        <div className="night-stars" style={{ opacity: 0.5 }} />
+                        <div className="absolute inset-0">
+                          <ModelViewer modelPath={product.modelPath} fallbackImage={product.image} />
+                        </div>
+                        {product.arEnabled && (
+                          <div
+                            className="absolute top-4 left-4"
+                            style={{
+                              background: 'var(--gold)', color: 'var(--gold-ink)',
+                              fontSize: '8px', letterSpacing: '0.2em', textTransform: 'uppercase',
+                              padding: '5px 10px',
+                              fontFamily: "var(--font-space), sans-serif", fontWeight: 600,
+                            }}
+                          >
+                            Try On
+                          </div>
+                        )}
+                        <CornerMarks color="rgba(255,255,255,0.1)" />
+                      </div>
+
+                      {/* Info */}
+                      <div
+                        className="flex flex-col gap-4 p-6 flex-1 items-center text-center"
+                        style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                      >
+                        <div className="w-full">
+                          <span style={{ fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--white-fade)' }}>
+                            {product.category}
+                          </span>
+                          <h3
+                            className="font-editorial"
+                            style={{ fontSize: '24px', fontWeight: 300, letterSpacing: '0.03em', color: 'var(--white)', marginTop: '4px', lineHeight: 1.2 }}
+                          >
+                            {product.name}
+                          </h3>
+                          <div
+                            className="flex items-center justify-center mt-3"
+                            style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}
+                          >
+                            <span style={{ fontSize: '15px', fontWeight: 400, color: 'var(--white)', letterSpacing: '0.05em' }}>
+                              {product.price}
+                            </span>
+                          </div>
+                        </div>
+                        <p style={{
+                          fontSize: '11px', fontWeight: 300,
+                          color: 'var(--white-fade)', lineHeight: 1.7,
+                          overflow: 'hidden', display: '-webkit-box',
+                          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        } as React.CSSProperties}>
+                          {product.description}
+                        </p>
+                        {product.arEnabled ? (
+                          <button
+                            className="btn-fill w-full"
+                            style={{ width: '100%', marginTop: '4px' }}
+                            onClick={() => setActiveArProduct(product)}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Try On Live
+                          </button>
+                        ) : (
+                          <div
+                            className="w-full flex items-center justify-center"
+                            style={{
+                              marginTop: '4px', padding: '14px 32px',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              fontSize: '10px', letterSpacing: '0.22em', textTransform: 'uppercase',
+                              color: 'var(--white-fade)',
+                              fontFamily: "var(--font-space), sans-serif",
+                            }}
+                          >
+                            Try-On Coming Soon
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
-
-            {/* Catalog Grid */}
-            {filteredProducts.length === 0 ? (
-              <div className="text-center py-20 text-slate-400 font-light">
-                No jewelry items match your active search filters.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="group relative bg-white border border-[#5F3041]/10 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-[#5F3041]/30 hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm"
-                  >
-                    {/* Visual Card */}
-                    <div className={`w-full aspect-[4/3] bg-gradient-to-tr ${getProductBackdrop(product.id)} flex items-center justify-center p-6 border-b border-[#5F3041]/5 relative`}>
-                      <div className="absolute inset-0 opacity-5 flex items-center justify-center">
-                        <div className="w-32 h-32 rounded-full border border-[#5F3041]" />
-                      </div>
-
-                      <img src={product.image} alt={product.name} className="max-h-[80%] max-w-[80%] object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300 relative z-10" />
-
-                      {product.arEnabled && (
-                        <span className="absolute top-4 right-4 bg-white/80 border border-[#5F3041]/10 px-3 py-1 rounded-full text-[9px] font-bold text-[#5F3041] tracking-wider uppercase backdrop-blur-md z-20">
-                          ✦ Try On Live
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="p-6 space-y-4 flex flex-col items-center text-center">
-                      <div className="w-full flex flex-col items-center">
-                        <h3 className="text-xl font-light tracking-wide text-[#2E0820] font-serif group-hover:text-[#5F3041] transition-colors">
-                          {product.name}
-                        </h3>
-                        <span className="text-lg text-[#5F3041] font-semibold font-sans mt-2">{product.price}</span>
-                        <div className="text-[10px] text-amber-500 flex gap-0.5 mt-1.5 justify-center">
-                          <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-slate-500 font-light leading-relaxed h-12 overflow-hidden max-w-xs mx-auto">
-                        {product.description}
-                      </p>
-
-                      <div className="pt-4 border-t border-[#5F3041]/5 w-full flex justify-center">
-                        <button
-                          onClick={() => setActiveArProduct(product)}
-                          className="w-full py-3.5 bg-[#5F3041] hover:bg-[#4A2231] text-white text-xs tracking-widest uppercase font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          Try On Live
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          </section>
         )}
 
-        {/* ==================== ABOUT US TAB ==================== */}
+        {/* ==================== ABOUT TAB ==================== */}
         {activeTab === 'about' && (
-          <div className="space-y-16 max-w-4xl mx-auto fade-in">
-            {/* Title */}
-            <div className="text-center space-y-2">
-              <p className="text-[9px] tracking-[0.25em] font-bold text-[#5F3041] uppercase">Our Heritage & Craft</p>
-              <h2 className="text-3xl md:text-4xl font-light font-serif text-[#2E0820]">About StellaLens</h2>
-            </div>
+          <>
+            {/* About hero — black */}
+            <section style={{ background: 'var(--black)' }}>
+              <div
+                className="max-w-7xl mx-auto px-6 sm:px-12 py-20 flex flex-col items-center text-center gap-4"
+                style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+                data-animate
+              >
+                <span className="label-tag">Our Heritage & Craft</span>
+                <h2
+                  className="font-editorial"
+                  style={{ fontSize: 'clamp(40px, 6vw, 72px)', fontWeight: 300, letterSpacing: '0.03em', color: 'var(--white)' }}
+                >
+                  About StellaLens
+                </h2>
+              </div>
+            </section>
 
-            {/* Content Story Grid */}
-            <div className="space-y-16 text-slate-700 font-light leading-relaxed text-sm">
-              <div className="flex flex-col items-center text-center space-y-8">
-                <div className="space-y-4 max-w-2xl mx-auto">
-                  <h3 className="text-2xl font-serif text-[#2E0820] font-light">Heritage Meets Next-Gen Fitting</h3>
-                  <p>
-                    StellaLens was founded on the vision of bridging ancient jewelry-making traditions with state-of-the-art visual technology. We custom design each piece from raw components, ensuring that every Ruby, Tanzanite, and Diamond halo reflects pure luxury.
+            {/* Story 1 — cream */}
+            <section style={{ background: 'var(--cream)', color: 'var(--cream-text)' }}>
+              <div className="max-w-7xl mx-auto px-6 sm:px-12 py-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                <div className="flex flex-col gap-6" data-animate>
+                  <h3
+                    className="font-editorial"
+                    style={{ fontSize: '36px', fontWeight: 300, color: 'var(--cream-text)', letterSpacing: '0.02em', fontStyle: 'italic' }}
+                  >
+                    Heritage meets next-gen fitting
+                  </h3>
+                  <p style={{ fontSize: '13px', fontWeight: 300, color: 'var(--cream-muted)', lineHeight: 1.9 }}>
+                    StellaLens was founded on the vision of bridging ancient jewellery-making traditions with state-of-the-art visual technology. We custom design each piece from raw components, ensuring that every Ruby, Tanzanite, and Diamond halo reflects pure luxury.
                   </p>
-                  <p>
-                    Part of the MoonStella Collection, we hold ourselves to the highest standards of materials and craftsmanship, sourcing exclusively ethical stones and conflict-free yellow and white gold.
+                  <p style={{ fontSize: '13px', fontWeight: 300, color: 'var(--cream-muted)', lineHeight: 1.9 }}>
+                    Part of the MoonStella Collection, we hold ourselves to the highest standards of materials and craftsmanship — sourcing exclusively ethical stones and conflict-free yellow and white gold.
                   </p>
+                  <button
+                    className="btn-fill-cream-solid w-fit"
+                    onClick={() => goToTab('jewelry')}
+                  >
+                    Explore Pieces
+                    <ArrowRight />
+                  </button>
                 </div>
-                <div className="w-full max-w-xl aspect-video rounded-2xl border border-[#5F3041]/10 bg-gradient-to-tr from-[#FDFAF7] to-[#FAF6EE] flex items-center justify-center p-6 shadow-md">
-                  <span className="text-[10px] font-bold tracking-[0.25em] uppercase text-[#5F3041]">Crafted in 18K Solid Gold</span>
+                <div
+                  className="flex items-center justify-center"
+                  data-animate="scale"
+                  style={{
+                    background: 'var(--cream-dark)', aspectRatio: '4/3',
+                    border: '1px solid var(--cream-border)',
+                  }}
+                >
+                  <span
+                    className="font-editorial"
+                    style={{ fontSize: '12px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--cream-muted)' }}
+                  >
+                    Crafted in 18K Solid Gold
+                  </span>
                 </div>
               </div>
+            </section>
 
-              <hr className="border-[#5F3041]/10" />
-
-              {/* The VTO Tech */}
-              <div className="flex flex-col items-center text-center space-y-8">
-                <div className="space-y-4 max-w-2xl mx-auto">
-                  <h3 className="text-2xl font-serif text-[#2E0820] font-light">Virtual fitting. Flawless simulation.</h3>
-                  <p>
-                    Our virtual try-on module utilizes high-performance computer vision algorithms. By tracking landmarks on the cheek, jawline, and chin corner, we calculate the face's exact depth coordinates and scale factors.
-                  </p>
-                  <p>
-                    With integrated velocity lookahead projection and physical harmonic osculation swing simulation, the jewelry reacts dynamically to your movements under simulated gravitational fields.
-                  </p>
+            {/* Story 2 — black */}
+            <section style={{ background: 'var(--black)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="max-w-7xl mx-auto px-6 sm:px-12 py-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                <div
+                  className="flex items-center justify-center order-2 lg:order-1"
+                  data-animate="scale"
+                  style={{
+                    background: 'var(--black-card)', aspectRatio: '4/3',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                  }}
+                >
+                  <span
+                    className="font-editorial"
+                    style={{ fontSize: '12px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--white-fade)' }}
+                  >
+                    85ms Smoothing Tracker
+                  </span>
                 </div>
-                <div className="w-full max-w-xl aspect-video rounded-2xl border border-[#5F3041]/10 bg-gradient-to-tr from-[#FAF8F5] to-[#EFEBE4] flex items-center justify-center p-6 shadow-md">
-                  <span className="text-[10px] font-bold tracking-[0.25em] uppercase text-[#5F3041]">85ms Smoothing Tracker</span>
+                <div className="flex flex-col gap-6 order-1 lg:order-2" data-animate>
+                  <h3
+                    className="font-editorial"
+                    style={{ fontSize: '36px', fontWeight: 300, color: 'var(--white)', letterSpacing: '0.02em', fontStyle: 'italic' }}
+                  >
+                    Virtual fitting. Flawless simulation.
+                  </h3>
+                  <p style={{ fontSize: '13px', fontWeight: 300, color: 'var(--white-fade)', lineHeight: 1.9 }}>
+                    Our virtual try-on module utilises high-performance computer vision. By tracking landmarks on the cheek, jawline, and chin corner, we calculate the face's exact depth coordinates and scale factors.
+                  </p>
+                  <p style={{ fontSize: '13px', fontWeight: 300, color: 'var(--white-fade)', lineHeight: 1.9 }}>
+                    With integrated velocity lookahead projection and harmonic oscillation swing simulation, the jewellery reacts dynamically to your movements under simulated gravitational fields.
+                  </p>
                 </div>
               </div>
-            </div>
-          </div>
+            </section>
+          </>
         )}
       </main>
 
-      {/* 4. Persistent Footer */}
-      <footer className="w-full border-t border-[#5F3041]/10 bg-[#FDFAF7] py-12 text-center space-y-4">
-        <p className="text-[9px] text-[#5F3041] tracking-widest font-semibold uppercase">
-          STELLALENS FINE JEWELRY
-        </p>
-        <p className="text-[9px] text-slate-500 tracking-widest font-light uppercase">
-          © 2026 STELLALENS FINE JEWELRY. ALL RIGHTS RESERVED.
-        </p>
-        <p className="text-[8px] text-slate-400 tracking-widest uppercase">
-          ✦ CELESTIAL FITTING ROOM CREATED FOR THE MOONSTELLA BRAND ✦
-        </p>
+
+      {/* ══════════════════════════════════════
+          FOOTER — black
+      ══════════════════════════════════════ */}
+      <footer
+        className="w-full py-14 flex flex-col items-center gap-5 text-center"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.07)', background: 'var(--black)' }}
+      >
+        <span
+          className="flex items-center gap-2"
+          style={{
+            fontSize: '20px', letterSpacing: '0.4em',
+            textTransform: 'uppercase', fontWeight: 300,
+            color: 'var(--white)', fontFamily: "var(--font-space), sans-serif",
+          }}
+        >
+          STELLA<Star size={9} />LENS
+        </span>
+        <span className="label-white" style={{ fontSize: '9px' }}>Named for the night sky · Made to order</span>
+        <div className="flex items-center gap-3">
+          <div style={{ width: '40px', height: '1px', background: 'rgba(201,168,112,0.3)' }} />
+          <Star size={7} color="var(--gold-fade)" />
+          <div style={{ width: '40px', height: '1px', background: 'rgba(201,168,112,0.3)' }} />
+        </div>
+        <div className="flex gap-6">
+          {(['home', 'jewelry', 'about'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => goToTab(tab)}
+              className="underline-slide cursor-pointer"
+              style={{
+                background: 'none', border: 'none',
+                fontSize: '9px', letterSpacing: '0.2em',
+                textTransform: 'uppercase', color: 'var(--white-fade)',
+                fontFamily: "var(--font-space), sans-serif",
+              }}
+            >
+              {tab === 'about' ? 'About Us' : tab}
+            </button>
+          ))}
+        </div>
+        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.18)', letterSpacing: '0.18em', textTransform: 'uppercase' }}>
+          © 2026 StellaLens. All rights reserved.
+        </span>
       </footer>
 
-      {/* AR View Fullscreen Overlay */}
+
+      {/* AR View */}
       {activeArProduct && (
         <ARView
           product={activeArProduct}
           onClose={() => setActiveArProduct(null)}
-          onOpenOrderModal={handleOpenOrder}
+          onOpenOrderModal={setOrderData}
         />
       )}
 
-      {/* Bespoke Order Modal */}
+      {/* Order Modal */}
       <OrderModal
         isOpen={orderData !== null}
         onClose={() => setOrderData(null)}

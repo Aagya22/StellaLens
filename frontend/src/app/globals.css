@@ -1,56 +1,420 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────
+   DESIGN TOKENS
+───────────────────────────────────────── */
 :root {
-  --burgundy: #5F3041;
-  --burgundy-hover: #4A2231;
-  --cream: #F5F0EB;
-  --warm-white: #FDFAF7;
-  --background: #FCF9F8;
-  --foreground: #1a1a1a;
+  /* Night sky — deep ink blue, never flat black */
+  --black:         #0a0d17;
+  --black-soft:    #0d1120;
+  --black-card:    #10152a;
+  --black-border:  rgba(255, 255, 255, 0.07);
+  /* Warm ivory — matches the product photography backgrounds */
+  --cream:         #f2ede3;
+  --cream-dark:    #e7dfd1;
+  --cream-border:  rgba(25, 23, 18, 0.12);
+  --cream-text:    #191712;
+  --cream-muted:   rgba(25, 23, 18, 0.55);
+  /* Warm white text on night sections */
+  --white:         #f7f5f0;
+  --white-fade:    rgba(247, 245, 240, 0.55);
+  /* Champagne gold — the brand accent */
+  --gold:          #c9a870;
+  --gold-bright:   #e6cc9a;
+  --gold-fade:     rgba(201, 168, 112, 0.5);
+  --gold-ink:      #14110a;
+  /* Legacy name — remapped to gold so older accents stay coherent */
+  --red:           #c9a870;
+  --background:    #0a0d17;
+  --foreground:    #f7f5f0;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-burgundy: var(--burgundy);
-  --color-burgundy-hover: var(--burgundy-hover);
-  --color-cream: var(--cream);
-  --color-warm-white: var(--warm-white);
-  --font-serif: var(--font-playfair);
-  --font-sans: var(--font-montserrat);
+  --font-serif:       var(--font-cormorant);
+  --font-sans:        var(--font-space);
 }
 
-* {
-  margin: 0;
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
+/* ─────────────────────────────────────────
+   BASE RESET
+───────────────────────────────────────── */
+*, *::before, *::after { margin: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-montserrat), sans-serif;
+  background: var(--black);
+  color: var(--white);
+  font-family: var(--font-space), 'Space Grotesk', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-.btn-primary {
-  display: inline-block;
-  width: fit-content;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: white;
-  background-color: #5F3041;
-  padding: 12px 24px;
-  transition: opacity 0.2s;
+/* ─────────────────────────────────────────
+   TYPOGRAPHY
+───────────────────────────────────────── */
+.font-editorial {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', serif;
+}
+
+.label-tag {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
-  border-radius: 8px;
-  font-family: var(--font-montserrat), sans-serif;
+  color: var(--gold);
+  font-family: var(--font-space), sans-serif;
 }
 
-.btn-primary:hover {
-  opacity: 0.95;
-  background-color: #4A2231;
+.label-white {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--white-fade);
+  font-family: var(--font-space), sans-serif;
+}
+
+/* ─────────────────────────────────────────
+   SCROLL ANIMATIONS
+───────────────────────────────────────── */
+[data-animate] {
+  opacity: 0;
+  transform: translateY(32px);
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-animate].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+[data-animate-delay="1"] { transition-delay: 0.08s; }
+[data-animate-delay="2"] { transition-delay: 0.18s; }
+[data-animate-delay="3"] { transition-delay: 0.30s; }
+[data-animate-delay="4"] { transition-delay: 0.42s; }
+[data-animate-delay="5"] { transition-delay: 0.55s; }
+
+[data-animate="fade"] { transform: none; }
+
+[data-animate="scale"] {
+  transform: scale(0.96);
+  opacity: 0;
+}
+[data-animate="scale"].is-visible {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* ─────────────────────────────────────────
+   BUTTONS — gradient-slide fill technique
+   Background uses a two-stop gradient that
+   slides via background-position. This way
+   text is ALWAYS in the DOM flow and visible,
+   regardless of z-index.
+───────────────────────────────────────── */
+
+/* ── Dark-section ghost → fills white ── */
+.btn-fill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-space), sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  border-radius: 0;
+  cursor: pointer;
+  /* gradient: top half = gold (fill color), bottom half = transparent */
+  background-image: linear-gradient(to top, var(--gold) 50%, transparent 50%);
+  background-size: 100% 210%;
+  background-position: bottom; /* start showing transparent half */
+  border: 1px solid rgba(247, 245, 240, 0.35);
+  color: var(--white);
+  transition:
+    background-position 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s ease;
+}
+.btn-fill:hover {
+  background-position: top; /* slide gold fill up into view */
+  color: var(--gold-ink);
+  border-color: var(--gold);
+}
+
+/* ── Dark-section solid white → empties to ghost ── */
+.btn-fill-solid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-space), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  border-radius: 0;
+  cursor: pointer;
+  /* gradient: top half = night (reveal), bottom half = gold (fill) */
+  background-image: linear-gradient(to top, var(--black-soft) 50%, var(--gold) 50%);
+  background-size: 100% 210%;
+  background-position: bottom; /* shows gold half */
+  border: 1px solid var(--gold);
+  color: var(--gold-ink);
+  transition:
+    background-position 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn-fill-solid:hover {
+  background-position: top; /* slides night up, gold gone */
+  color: var(--gold-bright);
+}
+
+/* ── Cream-section ghost black → fills black ── */
+.btn-fill-cream {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-space), sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  border-radius: 0;
+  cursor: pointer;
+  background-image: linear-gradient(to top, var(--black) 50%, transparent 50%);
+  background-size: 100% 210%;
+  background-position: bottom;
+  border: 1px solid rgba(10, 10, 10, 0.4);
+  color: var(--black);
+  transition:
+    background-position 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s ease;
+}
+.btn-fill-cream:hover {
+  background-position: top;
+  color: var(--cream);
+  border-color: var(--black);
+}
+
+/* ── Cream-section solid black → reveals cream ── */
+.btn-fill-cream-solid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-space), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  border-radius: 0;
+  cursor: pointer;
+  background-image: linear-gradient(to top, var(--cream) 50%, var(--black) 50%);
+  background-size: 100% 210%;
+  background-position: bottom;
+  border: 1px solid var(--black);
+  color: var(--white);
+  transition:
+    background-position 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn-fill-cream-solid:hover {
+  background-position: top;
+  color: var(--black);
+}
+
+/* ── AR sidebar button ── */
+.btn-ar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-space), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 16px 32px;
+  border-radius: 0;
+  cursor: pointer;
+  width: 100%;
+  background-image: linear-gradient(to top, var(--black-soft) 50%, var(--gold) 50%);
+  background-size: 100% 210%;
+  background-position: bottom;
+  border: 1px solid var(--gold);
+  color: var(--gold-ink);
+  transition:
+    background-position 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn-ar:hover {
+  background-position: top;
+  color: var(--gold-bright);
+}
+
+/* ─────────────────────────────────────────
+   UNDERLINE SLIDE
+───────────────────────────────────────── */
+.underline-slide {
+  position: relative;
+  display: inline-block;
+}
+.underline-slide::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; left: 0;
+  width: 0; height: 1px;
+  background: currentColor;
+  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.underline-slide:hover::after { width: 100%; }
+
+/* ─────────────────────────────────────────
+   COLLECTION CARD HOVER
+───────────────────────────────────────── */
+.collection-card .card-letter {
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s;
+}
+.collection-card:hover .card-letter {
+  transform: scale(1.06);
+  opacity: 0.07;
+}
+.collection-card .card-arrow {
+  transition: transform 0.35s ease;
+}
+.collection-card:hover .card-arrow {
+  transform: translateX(5px);
+}
+
+/* ─────────────────────────────────────────
+   PRODUCT CARD
+───────────────────────────────────────── */
+.product-card-img {
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.product-card:hover .product-card-img {
+  transform: scale(1.05);
+}
+
+/* ─────────────────────────────────────────
+   FORM INPUTS
+───────────────────────────────────────── */
+.input-dark {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--white);
+  font-family: var(--font-space), sans-serif;
+  font-size: 13px;
+  font-weight: 300;
+  padding: 10px 0;
+  outline: none;
+  transition: border-color 0.25s ease;
+  border-radius: 0;
+}
+.input-dark::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.input-dark:focus { border-bottom-color: var(--white); }
+
+/* Range slider — dark theme */
+.range-dark {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 1px;
+  background: rgba(255,255,255,0.15);
+  outline: none;
+  cursor: pointer;
+}
+.range-dark::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--white);
+  cursor: pointer;
+}
+.range-dark::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--white);
+  cursor: pointer;
+  border: none;
+}
+
+/* ─────────────────────────────────────────
+   SCROLLBAR
+───────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--black); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* ─────────────────────────────────────────
+   SELECTION
+───────────────────────────────────────── */
+::selection {
+  background: rgba(201, 168, 112, 0.35);
+  color: var(--white);
+}
+
+/* ─────────────────────────────────────────
+   NIGHT SKY — starfield layers
+   Percent-positioned dots scale with the
+   section; ::after layer twinkles.
+───────────────────────────────────────── */
+.night-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-image:
+    radial-gradient(1px 1px at 8% 18%,  rgba(247,245,240,0.55) 50%, transparent 51%),
+    radial-gradient(1px 1px at 21% 62%, rgba(247,245,240,0.35) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 15% 38%, rgba(230,204,154,0.5) 50%, transparent 51%),
+    radial-gradient(1px 1px at 31% 12%, rgba(247,245,240,0.45) 50%, transparent 51%),
+    radial-gradient(1px 1px at 42% 74%, rgba(247,245,240,0.3) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 55% 21%, rgba(247,245,240,0.5) 50%, transparent 51%),
+    radial-gradient(1px 1px at 63% 55%, rgba(230,204,154,0.4) 50%, transparent 51%),
+    radial-gradient(1px 1px at 71% 9%,  rgba(247,245,240,0.5) 50%, transparent 51%),
+    radial-gradient(1px 1px at 79% 41%, rgba(247,245,240,0.35) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 88% 26%, rgba(247,245,240,0.55) 50%, transparent 51%),
+    radial-gradient(1px 1px at 94% 66%, rgba(230,204,154,0.4) 50%, transparent 51%),
+    radial-gradient(1px 1px at 48% 88%, rgba(247,245,240,0.3) 50%, transparent 51%);
+}
+.night-stars::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-image:
+    radial-gradient(2px 2px at 26% 28%, rgba(247,245,240,0.8) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 68% 33%, rgba(230,204,154,0.85) 50%, transparent 51%),
+    radial-gradient(2px 2px at 84% 14%, rgba(247,245,240,0.7) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 12% 76%, rgba(230,204,154,0.7) 50%, transparent 51%),
+    radial-gradient(2px 2px at 57% 68%, rgba(247,245,240,0.6) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 38% 45%, rgba(247,245,240,0.75) 50%, transparent 51%);
+  animation: twinkle 5.5s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+/* Collection slider — slide/fade-in on change */
+@keyframes slideFade {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.slide-fade {
+  animation: slideFade 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

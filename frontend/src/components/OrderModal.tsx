@@ -30,9 +30,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      // Mock API call to simulate saving order to database (MongoDB)
       await new Promise((resolve) => setTimeout(resolve, 1500));
       setSuccess(true);
     } catch (err) {
@@ -43,144 +41,230 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in text-[#1a1a1a]">
-      <div className="relative w-full max-w-lg bg-[#FDFAF7] border border-[#5F3041]/10 rounded-2xl p-6 md:p-8 overflow-hidden shadow-2xl">
-
-
-        <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full bg-[#5F3041]/5 blur-[80px] pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-48 h-48 rounded-full bg-amber-500/5 blur-[80px] pointer-events-none" />
-
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#F5F0EB] border border-transparent hover:border-[#5F3041]/10 transition-all cursor-pointer text-slate-400 hover:text-slate-600"
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}
+    >
+      <div
+        className="relative w-full max-w-lg overflow-hidden fade-in"
+        style={{
+          background: '#111111',
+          border: '1px solid rgba(255,255,255,0.1)',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+        }}
+      >
+        {/* Top bar */}
+        <div
+          className="flex items-center justify-between px-8 py-5"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+          <span
+            style={{
+              fontSize: '9px',
+              letterSpacing: '0.25em',
+              textTransform: 'uppercase',
+              color: 'var(--red)',
+              fontFamily: "var(--font-space), sans-serif",
+              fontWeight: 500,
+            }}
+          >
+            — Order Configuration
+          </span>
+          <button
+            onClick={onClose}
+            className="cursor-pointer"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(255,255,255,0.4)',
+              lineHeight: 0,
+              transition: 'color 0.2s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}
+          >
+            {/* X */}
+            <svg width="18" height="18" viewBox="0 0 46.1 46.1" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <line x1="0.4" y1="0.4" x2="45.7" y2="45.7" />
+              <line x1="0.4" y1="45.7" x2="45.7" y2="0.4" />
+            </svg>
+          </button>
+        </div>
 
-        {success ? (
-          <div className="text-center py-6">
-            <div className="w-16 h-16 rounded-full bg-[#5F3041]/5 border border-[#5F3041]/20 flex items-center justify-center mx-auto mb-6 text-[#5F3041]">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h3 className="text-2xl font-light tracking-wide text-[#1a1a1a]">Bespoke Order Received</h3>
-            <p className="text-sm text-slate-600 font-light mt-3 leading-relaxed">
-              Thank you for choosing **StellaLens**. Our master jeweler will review your custom configuration and contact you at **{email}** within 24 hours.
-            </p>
-            <button
-              onClick={onClose}
-              className="mt-8 px-8 py-3 bg-[#5F3041] hover:bg-[#4A2231] text-white font-bold rounded-xl transition-all tracking-widest uppercase text-xs shadow-md cursor-pointer"
-            >
-              Continue Browsing
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <span className="text-[9px] tracking-[0.2em] font-bold text-[#5F3041] uppercase block">Order Configuration</span>
-              <h3 className="text-2xl font-light tracking-wide mt-1 text-[#1a1a1a]">{orderDetails.productName}</h3>
-              <p className="text-lg text-[#5F3041] font-semibold mt-1">{orderDetails.price}</p>
-            </div>
-
-            {/* Customization Details card */}
-            <div className="bg-[#F5F0EB]/60 border border-[#5F3041]/10 rounded-xl p-4 space-y-2 text-xs font-light text-slate-700">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Fitting Scale:</span>
-                <span className="font-mono text-[#5F3041] font-semibold">{orderDetails.customizations.scale}x</span>
+        <div className="px-8 py-8">
+          {success ? (
+            /* ── Success State ── */
+            <div className="flex flex-col items-center text-center gap-6 py-8">
+              <div
+                className="w-14 h-14 flex items-center justify-center"
+                style={{ border: '1px solid rgba(255,255,255,0.15)' }}
+              >
+                <svg width="22" height="22" fill="none" stroke="var(--white)" viewBox="0 0 24 24" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
               </div>
-              {orderDetails.customizations.topGem && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Top Gem Selection:</span>
-                  <span className="font-semibold text-[#5F3041] capitalize">{orderDetails.customizations.topGem}</span>
-                </div>
-              )}
-              {orderDetails.customizations.bottomGem && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Bottom Gem Selection:</span>
-                  <span className="font-semibold text-[#5F3041] capitalize">{orderDetails.customizations.bottomGem}</span>
-                </div>
-              )}
+              <div>
+                <h3
+                  className="font-editorial"
+                  style={{ fontSize: '28px', fontWeight: 300, color: 'var(--white)', letterSpacing: '0.03em' }}
+                >
+                  Order Received
+                </h3>
+                <p
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 300,
+                    color: 'rgba(255,255,255,0.5)',
+                    lineHeight: 1.8,
+                    marginTop: '12px',
+                    maxWidth: '320px',
+                  }}
+                >
+                  Thank you for choosing StellaLens. Our jeweller will review your configuration and contact you at{' '}
+                  <span style={{ color: 'var(--white)' }}>{email}</span> within 24 hours.
+                </p>
+              </div>
+              <button className="btn-ghost" onClick={onClose} style={{ marginTop: '8px' }}>
+                Continue Browsing
+              </button>
             </div>
+          ) : (
+            /* ── Order Form ── */
+            <form onSubmit={handleSubmit} className="flex flex-col gap-7">
 
-            <hr className="border-[#5F3041]/10" />
-
-            <div className="space-y-4">
-              <span className="text-[9px] tracking-[0.2em] font-bold text-[#5F3041] uppercase block">Delivery Information</span>
-
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500 font-light" htmlFor="name">Full Name</label>
-                <input
-                  type="text"
-                  id="name"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full px-4 py-3 bg-white border border-[#5F3041]/15 rounded-xl focus:border-[#5F3041] focus:ring-1 focus:ring-[#5F3041] focus:outline-none transition-all text-sm font-light text-[#1a1a1a]"
-                />
+              {/* Product info */}
+              <div>
+                <h3
+                  className="font-editorial"
+                  style={{ fontSize: '26px', fontWeight: 300, color: 'var(--white)', letterSpacing: '0.03em' }}
+                >
+                  {orderDetails.productName}
+                </h3>
+                <span
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 300,
+                    color: 'var(--white)',
+                    letterSpacing: '0.05em',
+                    display: 'block',
+                    marginTop: '6px',
+                  }}
+                >
+                  {orderDetails.price}
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-500 font-light" htmlFor="email">Email Address</label>
+              {/* Customisation summary */}
+              <div
+                className="flex flex-col gap-3 py-5 px-0"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+              >
+                <span style={{ fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontFamily: "var(--font-space), sans-serif" }}>
+                  Your Configuration
+                </span>
+                {[
+                  { label: 'Fitting Scale', value: `${orderDetails.customizations.scale}×` },
+                  orderDetails.customizations.topGem && { label: 'Top Gem', value: orderDetails.customizations.topGem },
+                  orderDetails.customizations.bottomGem && { label: 'Bottom Gem', value: orderDetails.customizations.bottomGem },
+                ].filter(Boolean).map((row: any) => (
+                  <div key={row.label} className="flex justify-between items-center">
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', fontWeight: 300 }}>{row.label}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--white)', fontWeight: 400, textTransform: 'capitalize' }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Delivery fields */}
+              <div className="flex flex-col gap-6">
+                <span style={{ fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontFamily: "var(--font-space), sans-serif" }}>
+                  Delivery Information
+                </span>
+
+                <div className="flex flex-col gap-1">
+                  <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }} htmlFor="modal-name">
+                    Full Name
+                  </label>
                   <input
-                    type="email"
-                    id="email"
+                    type="text"
+                    id="modal-name"
                     required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full px-4 py-3 bg-white border border-[#5F3041]/15 rounded-xl focus:border-[#5F3041] focus:ring-1 focus:ring-[#5F3041] focus:outline-none transition-all text-sm font-light text-[#1a1a1a]"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="input-dark"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-500 font-light" htmlFor="phone">Phone Number</label>
-                  <input
-                    type="tel"
-                    id="phone"
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-1">
+                    <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }} htmlFor="modal-email">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      id="modal-email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="input-dark"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }} htmlFor="modal-phone">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      id="modal-phone"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+977 98..."
+                      className="input-dark"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }} htmlFor="modal-address">
+                    Delivery Address
+                  </label>
+                  <textarea
+                    id="modal-address"
                     required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+977 98..."
-                    className="w-full px-4 py-3 bg-white border border-[#5F3041]/15 rounded-xl focus:border-[#5F3041] focus:ring-1 focus:ring-[#5F3041] focus:outline-none transition-all text-sm font-light text-[#1a1a1a]"
+                    rows={2}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Street, City, Zip Code"
+                    className="input-dark"
+                    style={{ resize: 'none' }}
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500 font-light" htmlFor="address">Delivery Address</label>
-                <textarea
-                  id="address"
-                  required
-                  rows={2}
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Street, City, Zip Code"
-                  className="w-full px-4 py-3 bg-white border border-[#5F3041]/15 rounded-xl focus:border-[#5F3041] focus:ring-1 focus:ring-[#5F3041] focus:outline-none transition-all text-sm font-light text-[#1a1a1a] resize-none"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 bg-[#5F3041] hover:bg-[#4A2231] text-white font-bold rounded-xl transition-all tracking-widest uppercase text-xs flex items-center justify-center disabled:opacity-50 cursor-pointer shadow-md hover:shadow-lg"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Processing Order...
-                </>
-              ) : (
-                'Place Custom Order'
-              )}
-            </button>
-          </form>
-        )}
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full"
+                style={{ borderRadius: 0, width: '100%', opacity: loading ? 0.6 : 1 }}
+              >
+                {loading ? (
+                  <>
+                    <div
+                      className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin"
+                    />
+                    Processing...
+                  </>
+                ) : (
+                  'Place Custom Order'
+                )}
+              </button>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

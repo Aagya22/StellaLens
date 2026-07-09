@@ -1,20 +1,23 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Montserrat } from "next/font/google";
+import { Cormorant_Garamond, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
+const cormorant = Cormorant_Garamond({
+  variable: "--font-cormorant",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
-const montserrat = Montserrat({
-  variable: "--font-montserrat",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "StellaLens | Your Celestial Jewelry Fitting Room",
-  description: "Experience fine gold & diamond jewelry try-on live in your browser. Customize gemstones, scales, and order bespoke hand-crafted pieces.",
+  title: "StellaLens | Virtual Jewelry Try-On",
+  description: "Discover and try on fine jewelry in real-time. Sculptural design, precision-crafted pieces — experience them live before you order.",
 };
 
 export default function RootLayout({
@@ -25,7 +28,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${playfair.variable} ${montserrat.variable} h-full antialiased`}
+      className={`${cormorant.variable} ${spaceGrotesk.variable} h-full`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
