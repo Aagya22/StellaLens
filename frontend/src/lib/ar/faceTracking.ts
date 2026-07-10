@@ -30,15 +30,12 @@ function averagePoint(points) {
 function findExtremes(landmarks, { minY, maxY, minX, maxX }) {
   let left = null;
   let right = null;
-
   for (const p of landmarks) {
     if (p.y < minY || p.y > maxY) continue;
     if (p.x < minX || p.x > maxX) continue;
-
     if (!left || p.x < left.x) left = p;
     if (!right || p.x > right.x) right = p;
   }
-
   return { left, right };
 }
 
@@ -57,12 +54,10 @@ function landmarkAt(landmarks, index) {
   return p;
 }
 
-
 export class FaceTracker {
   constructor() {
     this._landmarker = null;
     this._ready = false;
-
     this._lastGoodMatrix = null;
   }
 
@@ -72,9 +67,7 @@ export class FaceTracker {
 
   async init() {
     if (this._ready) return;
-
     const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
-
     try {
       this._landmarker = await FaceLandmarker.createFromOptions(fileset, {
         baseOptions: {
@@ -87,7 +80,6 @@ export class FaceTracker {
         outputFacialTransformationMatrixes: true,
       });
     } catch (err) {
-      // Fallback if GPU delegate is not available.
       this._landmarker = await FaceLandmarker.createFromOptions(fileset, {
         baseOptions: {
           modelAssetPath: MODEL_URL,
@@ -99,83 +91,55 @@ export class FaceTracker {
         outputFacialTransformationMatrixes: true,
       });
     }
-
     this._ready = true;
   }
 
-  /**
-   * Detect landmarks for the current video frame.
-   * @param {HTMLVideoElement} video
-   * @param {number} nowMs 
-   */
   detect(video, nowMs) {
     if (!this._landmarker) return null;
-
     const mpResult = this._landmarker.detectForVideo(video, nowMs);
     const faceLandmarks = mpResult.faceLandmarks?.[0];
     if (!faceLandmarks || faceLandmarks.length === 0) return null;
-
-
     const chin = findChin(faceLandmarks);
-
-
     const leftEarIdx = 172;
     const rightEarIdx = 397;
-
-
     const jawLeftIdx = 172;
     const jawRightIdx = 397;
-
     const leftEarFixed = landmarkAt(faceLandmarks, leftEarIdx);
     const rightEarFixed = landmarkAt(faceLandmarks, rightEarIdx);
-
-
     const { left: leftEarCandidate, right: rightEarCandidate } = findExtremes(faceLandmarks, {
       minY: 0.25,
       maxY: 0.82,
       minX: 0.02,
       maxX: 0.98,
     });
-
     const leftEar = leftEarFixed ?? leftEarCandidate ?? { x: 0.2, y: 0.55, z: 0 };
     const rightEar = rightEarFixed ?? rightEarCandidate ?? { x: 0.8, y: 0.55, z: 0 };
-
-
     const jawLeftFixed = landmarkAt(faceLandmarks, jawLeftIdx);
     const jawRightFixed = landmarkAt(faceLandmarks, jawRightIdx);
-
     const { left: jawLeftCandidate, right: jawRightCandidate } = findExtremes(faceLandmarks, {
       minY: 0.58,
       maxY: 0.95,
       minX: 0.02,
       maxX: 0.98,
     });
-
     const jawLeft = jawLeftFixed ?? jawLeftCandidate;
     const jawRight = jawRightFixed ?? jawRightCandidate;
-
     const jawMid = averagePoint([
       jawLeft ?? leftEar,
       jawRight ?? rightEar,
       chin,
     ]);
-
-
     const neck = {
       x: clamp01(jawMid.x),
       y: clamp01(chin.y + 0.12),
       z: chin.z,
     };
-
     const facialMatrix = mpResult.facialTransformationMatrixes?.[0]?.data ?? null;
-
     const resolvedMatrix = facialMatrix ?? this._lastGoodMatrix;
     if (facialMatrix) this._lastGoodMatrix = facialMatrix;
-
     return {
       landmarks: faceLandmarks,
       poseMatrix: resolvedMatrix,
-
       leftEar,
       rightEar,
       jawLeft: jawLeft ?? leftEar,
@@ -188,9 +152,7 @@ export class FaceTracker {
   dispose() {
     try {
       this._landmarker?.close();
-    } catch {
-
-    }
+    } catch {}
     this._landmarker = null;
     this._ready = false;
   }

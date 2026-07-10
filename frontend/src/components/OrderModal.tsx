@@ -36,7 +36,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      loading && setLoading(false);
     }
   };
 
@@ -49,15 +49,15 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
         className="relative w-full max-w-lg overflow-hidden fade-in"
         style={{
           background: '#111111',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: '1px solid rgba(74,64,56,0.1)',
           maxHeight: '90vh',
           overflowY: 'auto',
+          overflowX: 'hidden',
         }}
       >
-        {/* Top bar */}
         <div
           className="flex items-center justify-between px-8 py-5"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+          style={{ borderBottom: '1px solid rgba(74,64,56,0.07)' }}
         >
           <span
             style={{
@@ -65,7 +65,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
               letterSpacing: '0.25em',
               textTransform: 'uppercase',
               color: 'var(--red)',
-              fontFamily: "var(--font-space), sans-serif",
+              fontFamily: "var(--font-jost), sans-serif",
               fontWeight: 500,
             }}
           >
@@ -77,14 +77,13 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
             style={{
               background: 'none',
               border: 'none',
-              color: 'rgba(255,255,255,0.4)',
+              color: 'rgba(74,64,56,0.4)',
               lineHeight: 0,
               transition: 'color 0.2s',
             }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(74,64,56,0.4)')}
           >
-            {/* X */}
             <svg width="18" height="18" viewBox="0 0 46.1 46.1" fill="none" stroke="currentColor" strokeWidth="1.5">
               <line x1="0.4" y1="0.4" x2="45.7" y2="45.7" />
               <line x1="0.4" y1="45.7" x2="45.7" y2="0.4" />
@@ -94,11 +93,10 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
 
         <div className="px-8 py-8">
           {success ? (
-            /* ── Success State ── */
             <div className="flex flex-col items-center text-center gap-6 py-8">
               <div
                 className="w-14 h-14 flex items-center justify-center"
-                style={{ border: '1px solid rgba(255,255,255,0.15)' }}
+                style={{ border: '1px solid rgba(74,64,56,0.15)' }}
               >
                 <svg width="22" height="22" fill="none" stroke="var(--white)" viewBox="0 0 24 24" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -115,7 +113,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
                   style={{
                     fontSize: '12px',
                     fontWeight: 300,
-                    color: 'rgba(255,255,255,0.5)',
+                    color: 'rgba(74,64,56,0.5)',
                     lineHeight: 1.8,
                     marginTop: '12px',
                     maxWidth: '320px',
@@ -130,10 +128,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
               </button>
             </div>
           ) : (
-            /* ── Order Form ── */
             <form onSubmit={handleSubmit} className="flex flex-col gap-7">
-
-              {/* Product info */}
               <div>
                 <h3
                   className="font-editorial"
@@ -155,12 +150,11 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
                 </span>
               </div>
 
-              {/* Customisation summary */}
               <div
                 className="flex flex-col gap-3 py-5 px-0"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+                style={{ borderTop: '1px solid rgba(74,64,56,0.07)', borderBottom: '1px solid rgba(74,64,56,0.07)' }}
               >
-                <span style={{ fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontFamily: "var(--font-space), sans-serif" }}>
+                <span style={{ fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(74,64,56,0.4)', fontFamily: "var(--font-jost), sans-serif" }}>
                   Your Configuration
                 </span>
                 {[
@@ -169,20 +163,19 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
                   orderDetails.customizations.bottomGem && { label: 'Bottom Gem', value: orderDetails.customizations.bottomGem },
                 ].filter(Boolean).map((row: any) => (
                   <div key={row.label} className="flex justify-between items-center">
-                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', fontWeight: 300 }}>{row.label}</span>
+                    <span style={{ fontSize: '11px', color: 'rgba(74,64,56,0.4)', fontWeight: 300 }}>{row.label}</span>
                     <span style={{ fontSize: '11px', color: 'var(--white)', fontWeight: 400, textTransform: 'capitalize' }}>{row.value}</span>
                   </div>
                 ))}
               </div>
 
-              {/* Delivery fields */}
               <div className="flex flex-col gap-6">
-                <span style={{ fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontFamily: "var(--font-space), sans-serif" }}>
+                <span style={{ fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(74,64,56,0.4)', fontFamily: "var(--font-jost), sans-serif" }}>
                   Delivery Information
                 </span>
 
                 <div className="flex flex-col gap-1">
-                  <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }} htmlFor="modal-name">
+                  <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(74,64,56,0.35)' }} htmlFor="modal-name">
                     Full Name
                   </label>
                   <input
@@ -198,7 +191,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
 
                 <div className="grid grid-cols-2 gap-6">
                   <div className="flex flex-col gap-1">
-                    <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }} htmlFor="modal-email">
+                    <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(74,64,56,0.35)' }} htmlFor="modal-email">
                       Email
                     </label>
                     <input
@@ -212,7 +205,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }} htmlFor="modal-phone">
+                    <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(74,64,56,0.35)' }} htmlFor="modal-phone">
                       Phone
                     </label>
                     <input
@@ -228,7 +221,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }} htmlFor="modal-address">
+                  <label style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(74,64,56,0.35)' }} htmlFor="modal-address">
                     Delivery Address
                   </label>
                   <textarea
@@ -244,7 +237,6 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
                 </div>
               </div>
 
-              {/* Submit */}
               <button
                 type="submit"
                 disabled={loading}

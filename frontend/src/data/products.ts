@@ -8,10 +8,11 @@ export interface Product {
   arEnabled: boolean;
   image: string;
   customizeColors?: boolean;
+  modelRotation?: [number, number, number];
+  pair?: boolean;
 }
 
 export const PRODUCTS: Product[] = [
-  /* ── Earrings ── */
   {
     id: "earring_diamond",
     name: "Astraea Diamond Drops",
@@ -21,7 +22,9 @@ export const PRODUCTS: Product[] = [
     modelPath: "/models/earrings/astraea_diamond_drops.glb",
     arEnabled: true,
     image: "/images/earrings1.png",
-    customizeColors: true
+    customizeColors: true,
+    modelRotation: [90, 0, 0],
+    pair: true
   },
   {
     id: "earring_gold_hoop",
@@ -53,8 +56,6 @@ export const PRODUCTS: Product[] = [
     arEnabled: true,
     image: "/images/earrings1.png"
   },
-
-  /* ── Necklaces ── */
   {
     id: "necklace_orlaith",
     name: "Orlaith Celestial Chain",
@@ -85,8 +86,6 @@ export const PRODUCTS: Product[] = [
     arEnabled: true,
     image: "/images/necklace1.png"
   },
-
-  /* ── Rings ── */
   {
     id: "ring_polaris",
     name: "Polaris Solitaire",
@@ -107,8 +106,6 @@ export const PRODUCTS: Product[] = [
     arEnabled: false,
     image: "/images/ring1.png"
   },
-
-  /* ── Bracelets ── */
   {
     id: "bracelet_callisto",
     name: "Callisto Chain",

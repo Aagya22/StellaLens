@@ -5,9 +5,7 @@ function clamp01(v) {
 
 function landmarkAt(landmarks, index) {
   const p = landmarks?.[index];
-
   if (!p) return null;
-
   if (
     !Number.isFinite(p.x) ||
     !Number.isFinite(p.y) ||
@@ -15,29 +13,23 @@ function landmarkAt(landmarks, index) {
   ) {
     return null;
   }
-
   return p;
 }
 
 export function computeFaceCenter(landmarks) {
   const indices = [1, 168, 33, 263];
-
   let x = 0;
   let y = 0;
   let z = 0;
   let count = 0;
-
   for (const idx of indices) {
     const p = landmarkAt(landmarks, idx);
-
     if (!p) continue;
-
     x += p.x;
     y += p.y;
     z += p.z;
     count++;
   }
-
   if (!count) {
     return {
       x: 0.5,
@@ -45,7 +37,6 @@ export function computeFaceCenter(landmarks) {
       z: 0,
     };
   }
-
   return {
     x: x / count,
     y: y / count,
@@ -58,20 +49,15 @@ function averagePoints(landmarks, indices) {
   let y = 0;
   let z = 0;
   let count = 0;
-
   for (const idx of indices) {
     const p = landmarkAt(landmarks, idx);
-
     if (!p) continue;
-
     x += p.x;
     y += p.y;
     z += p.z;
     count++;
   }
-
   if (!count) return null;
-
   return {
     x: x / count,
     y: y / count,
@@ -87,7 +73,6 @@ export function computeFaceWidth(
 ) {
   const left = landmarkAt(landmarks, 234);
   const right = landmarkAt(landmarks, 454);
-
   if (left && right) {
     return {
       left,
@@ -95,10 +80,8 @@ export function computeFaceWidth(
       width: Math.abs(right.x - left.x),
     };
   }
-
   const leftEye = landmarkAt(landmarks, 33);
   const rightEye = landmarkAt(landmarks, 263);
-
   if (leftEye && rightEye) {
     return {
       left: leftEye,
@@ -106,7 +89,6 @@ export function computeFaceWidth(
       width: Math.abs(rightEye.x - leftEye.x),
     };
   }
-
   if (leftAnchor && rightAnchor) {
     return {
       left: leftAnchor,
@@ -114,7 +96,6 @@ export function computeFaceWidth(
       width: Math.abs(rightAnchor.x - leftAnchor.x),
     };
   }
-
   return {
     left: { x: 0.3, y: 0.5, z: 0 },
     right: { x: 0.7, y: 0.5, z: 0 },
@@ -130,18 +111,10 @@ function estimateEarPosition(
 ) {
   const dx = sidePoint.x - faceCenter.x;
   const dz = sidePoint.z - faceCenter.z;
-
-  const outwardScale = 0.24; // Push outward from jawline to earlobes
-
-  const outwardX =
-    sidePoint.x + dx * outwardScale;
-
-  const outwardZ =
-    sidePoint.z + dz * outwardScale;
-
-  const lobeDrop =
-    Math.max(faceWidth * 0.035, 0.014); // Drop down to earlobe level
-
+  const outwardScale = 0.24;
+  const outwardX = sidePoint.x + dx * outwardScale;
+  const outwardZ = sidePoint.z + dz * outwardScale;
+  const lobeDrop = Math.max(faceWidth * 0.035, 0.014);
   return {
     x: outwardX,
     y: sidePoint.y + lobeDrop,
@@ -165,12 +138,7 @@ export class EarAnchor {
         confidence: 0,
       };
     }
-
-    const sidePoint = averagePoints(
-      landmarks,
-      this.indices
-    );
-
+    const sidePoint = averagePoints(landmarks, this.indices);
     if (!sidePoint) {
       return {
         x: this.side === "left" ? 0.22 : 0.78,
@@ -179,28 +147,14 @@ export class EarAnchor {
         confidence: 0,
       };
     }
-
-    const faceCenter =
-      computeFaceCenter(landmarks);
-
-    const { width } =
-      computeFaceWidth(landmarks);
-
-    const ear = estimateEarPosition(
-      faceCenter,
-      sidePoint,
-      width,
-      this.side
-    );
-
+    const faceCenter = computeFaceCenter(landmarks);
+    const { width } = computeFaceWidth(landmarks);
+    const ear = estimateEarPosition(faceCenter, sidePoint, width, this.side);
     ear.confidence = sidePoint.confidence;
-
     return ear;
   }
 
   static defaultLeft() {
-    // Cluster of landmarks surrounding the left earlobe:
-    // 132 = jaw-ear corner, 172 = lower jaw near lobe, 234 = cheek/ear edge
     return new EarAnchor({
       side: "left",
       indices: [132, 172, 234],
@@ -208,8 +162,6 @@ export class EarAnchor {
   }
 
   static defaultRight() {
-    // Cluster of landmarks surrounding the right earlobe:
-    // 361 = jaw-ear corner, 397 = lower jaw near lobe, 454 = cheek/ear edge
     return new EarAnchor({
       side: "right",
       indices: [361, 397, 454],

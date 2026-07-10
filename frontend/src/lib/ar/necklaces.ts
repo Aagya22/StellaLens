@@ -18,10 +18,8 @@ function disposeObject3D(root) {
 function normToStageXY(p, view) {
   const px = p.x * view.videoW;
   const py = p.y * view.videoH;
-
   const sx = px * view.cover.scale + view.cover.offsetX;
   const sy = py * view.cover.scale + view.cover.offsetY;
-
   const x = sx - view.stageW / 2;
   const y = view.stageH / 2 - sy;
   return { x, y };
@@ -52,10 +50,8 @@ function normalizeModelToUnit(root) {
   box.getSize(size);
   const maxDim = Math.max(size.x, size.y, size.z);
   if (!Number.isFinite(maxDim) || maxDim <= 0) return;
-
   const scale = 1 / maxDim;
   root.scale.multiplyScalar(scale);
-
   const box2 = new THREE.Box3().setFromObject(root);
   const center = new THREE.Vector3();
   box2.getCenter(center);
@@ -78,23 +74,16 @@ function forceGoldMaterial(root) {
 }
 
 export class NecklaceSystem {
-  /**
-   * @param {{ scene: THREE.Scene, gltfLoader: any, onStatus?: (msg: string) => void }} args
-   */
   constructor({ scene, gltfLoader, onStatus }) {
     this.scene = scene;
     this.loader = gltfLoader;
     this.onStatus = onStatus ?? (() => {});
-
     this.group = new THREE.Group();
     this.group.visible = false;
     this.scene.add(this.group);
-
     this.modelContainer = new THREE.Group();
     this.group.add(this.modelContainer);
-
     this._modelRoot = null;
-
     this._pos = new SmoothVec3();
     this._rot = new SmoothQuat();
   }
@@ -106,17 +95,14 @@ export class NecklaceSystem {
   async loadModel(modelPath) {
     this.clear();
     this.onStatus("Loading necklace model…");
-
     try {
       const gltf = await this.loader.loadAsync(modelPath);
       const root = gltf.scene;
-
       root.traverse((o) => {
         if (o.isMesh) {
           o.frustumCulled = false;
         }
       });
-
       this._modelRoot = root;
       normalizeModelToUnit(root);
       forceGoldMaterial(root);
@@ -133,58 +119,30 @@ export class NecklaceSystem {
       disposeObject3D(this._modelRoot);
       this._modelRoot = null;
     }
-
     while (this.modelContainer.children.length) {
       const child = this.modelContainer.children.pop();
       if (child) disposeObject3D(child);
     }
-
     this._pos.initialized = false;
     this._rot.initialized = false;
   }
 
-  /**
-   * @param {{
-   *  anchors: {
-   *    chin: {x:number,y:number,z:number},
-   *    jawLeft: {x:number,y:number,z:number},
-   *    jawRight: {x:number,y:number,z:number},
-   *    neck: {x:number,y:number,z:number}
-   *  },
-   *  view: { stageW:number, stageH:number, videoW:number, videoH:number, cover:{scale:number, offsetX:number, offsetY:number} },
-   *  jawWidthPx: number,
-   *  poseQuat: THREE.Quaternion,
-   *  dtSeconds: number
-   * }} args
-   */
   update({ anchors, view, jawWidthPx, poseQuat, dtSeconds }) {
     if (!this.group.visible) return;
-
     const alpha = computeAlpha(dtSeconds, 0.08);
-
     const centerX = (anchors.jawLeft.x + anchors.jawRight.x) * 0.5;
     const neckStage = normToStageXY({ x: centerX, y: anchors.neck.y, z: 0 }, view);
-
-    // Position slightly below chin / around the estimated neck.
     const target = new THREE.Vector3(neckStage.x, neckStage.y, 0);
-
-    // Keep necklace below chin: push down based on face size.
     target.y -= Math.max(12, jawWidthPx * 0.10);
-
     const pos = this._pos.step(target, alpha, dtSeconds);
-
-    // Dampen head rotation: necklace should rotate a bit, but not as much as ears.
     const euler = new THREE.Euler().setFromQuaternion(poseQuat, "YXZ");
-    euler.x *= 0.25; // pitch
-    euler.y *= 0.35; // yaw
-    euler.z *= 0.35; // roll
+    euler.x *= 0.25;
+    euler.y *= 0.35;
+    euler.z *= 0.35;
     const damped = new THREE.Quaternion().setFromEuler(euler);
-
     const rot = this._rot.step(damped, alpha, dtSeconds);
-
     this.group.position.copy(pos);
     this.group.quaternion.copy(rot);
-
     const scale = Math.max(120, jawWidthPx * 0.85);
     this.group.scale.setScalar(scale);
   }

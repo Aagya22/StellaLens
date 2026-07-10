@@ -28,7 +28,6 @@ const GEM_MAP = {
   amethyst: '#d03bff',
 };
 
-/* Thin X close icon (Minas style) */
 const CloseX = () => (
   <svg width="18" height="18" viewBox="0 0 46.1 46.1" fill="none" stroke="currentColor" strokeWidth="1.5">
     <line x1="0.4" y1="0.4" x2="45.7" y2="45.7" />
@@ -36,7 +35,6 @@ const CloseX = () => (
   </svg>
 );
 
-/* Back arrow */
 const BackArrow = () => (
   <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
     <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -243,8 +241,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       className="fixed inset-0 z-50 flex flex-col md:flex-row overflow-hidden"
       style={{ background: '#0a0a0a' }}
     >
-
-      {/* ── 1. Camera / AR Area ── */}
       <div
         ref={containerRef}
         className="relative flex-1 overflow-hidden flex items-center justify-center"
@@ -264,13 +260,11 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           style={{ transform: 'scaleX(-1)' }}
         />
 
-        {/* Loading overlay */}
         {loadingMsg && (
           <div
             className="absolute inset-0 flex flex-col items-center justify-center z-10 px-4 text-center"
             style={{ background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(8px)' }}
           >
-            {/* Spinner */}
             <div
               className="w-10 h-10 mb-6"
               style={{
@@ -284,8 +278,8 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             <span
               style={{
                 fontSize: '10px', letterSpacing: '0.28em',
-                textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)',
-                fontFamily: "var(--font-space), sans-serif", fontWeight: 400,
+                textTransform: 'uppercase', color: '#c5a880',
+                fontFamily: "var(--font-jost), sans-serif", fontWeight: 400,
               }}
             >
               {loadingMsg}
@@ -293,28 +287,26 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           </div>
         )}
 
-        {/* Back button — top left */}
         <button
           onClick={onClose}
           className="absolute top-5 left-5 z-20 cursor-pointer flex items-center gap-2"
           style={{
             background: 'rgba(10,10,10,0.7)',
             backdropFilter: 'blur(8px)',
-            border: '1px solid rgba(255,255,255,0.12)',
+            border: '1px solid rgba(255,255,255,0.15)',
             color: 'rgba(255,255,255,0.7)',
             padding: '10px 16px',
-            fontFamily: "var(--font-space), sans-serif",
+            fontFamily: "var(--font-jost), sans-serif",
             fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase',
-            transition: 'color 0.2s, border-color 0.2s',
+            transition: 'all 0.25s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
         >
           <BackArrow />
           Back
         </button>
 
-        {/* Camera tip + gem swatches overlay */}
         <div
           className="absolute bottom-5 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-20 w-[300px]"
           style={{
@@ -327,18 +319,17 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           <span
             style={{
               fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.45)',
-              fontFamily: "var(--font-space), sans-serif",
+              color: '#a8a29e',
+              fontFamily: "var(--font-jost), sans-serif",
             }}
           >
             Look straight at the camera
           </span>
 
           {product.customizeColors && (
-            <div className="w-full flex flex-col gap-3" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '12px' }}>
-              {/* Top Gem */}
+            <div className="w-full flex flex-col gap-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px' }}>
               <div className="flex items-center justify-between">
-                <span style={{ fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontFamily: "var(--font-space), sans-serif" }}>
+                <span style={{ fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#a8a29e', fontFamily: "var(--font-jost), sans-serif" }}>
                   Top Gem
                 </span>
                 <div className="flex gap-2">
@@ -366,9 +357,8 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 </div>
               </div>
 
-              {/* Bottom Gem */}
               <div className="flex items-center justify-between">
-                <span style={{ fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontFamily: "var(--font-space), sans-serif" }}>
+                <span style={{ fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#a8a29e', fontFamily: "var(--font-jost), sans-serif" }}>
                   Bottom Gem
                 </span>
                 <div className="flex gap-2">
@@ -400,50 +390,60 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         </div>
       </div>
 
-      {/* ── 2. Sidebar ── */}
       <div
         className="w-full md:w-[380px] flex flex-col overflow-y-auto"
         style={{
-          background: '#111111',
-          borderLeft: '1px solid rgba(255,255,255,0.07)',
+          background: '#131210',
+          borderLeft: '1px solid rgba(255,255,255,0.08)',
         }}
       >
-        {/* Sidebar header */}
         <div
           className="flex items-center justify-between px-8 py-5"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
         >
-          <span className="label-tag">— StellaLens VTO</span>
+          <span
+            style={{
+              fontSize: '9px',
+              letterSpacing: '0.25em',
+              textTransform: 'uppercase',
+              color: '#c5a880',
+              fontFamily: 'var(--font-jost), sans-serif',
+              fontWeight: 500,
+            }}
+          >
+            — StellaLens VTO
+          </span>
           <button
             onClick={onClose}
             className="cursor-pointer"
             style={{
               background: 'none', border: 'none',
-              color: 'rgba(255,255,255,0.3)',
+              color: 'rgba(255,255,255,0.4)',
               lineHeight: 0, transition: 'color 0.2s',
             }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.3)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}
           >
             <CloseX />
           </button>
         </div>
 
-        {/* Product info */}
-        <div className="px-8 py-7 flex flex-col gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="px-8 py-7 flex flex-col gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <h2
             className="font-editorial"
             style={{
               fontSize: '28px', fontWeight: 300,
               letterSpacing: '0.02em', color: '#fff', lineHeight: 1.2,
+              fontFamily: "var(--font-cormorant), 'Cormorant Garamond', serif",
             }}
           >
             {product.name}
           </h2>
           <span
             style={{
-              fontSize: '18px', fontWeight: 300,
-              color: '#fff', letterSpacing: '0.05em',
+              fontSize: '18px', fontWeight: 400,
+              color: '#c5a880', letterSpacing: '0.05em',
+              fontFamily: "var(--font-jost), sans-serif",
             }}
           >
             {product.price}
@@ -451,24 +451,22 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           <p
             style={{
               fontSize: '12px', fontWeight: 300,
-              color: 'rgba(255,255,255,0.45)', lineHeight: 1.8, marginTop: '4px',
+              color: 'rgba(255,255,255,0.65)', lineHeight: 1.8, marginTop: '4px',
+              fontFamily: "var(--font-jost), sans-serif",
             }}
           >
             {product.description}
           </p>
         </div>
 
-        {/* Controls */}
         <div className="flex-1 px-8 py-7 flex flex-col gap-8">
-
-          {/* Size Scale */}
           <div className="flex flex-col gap-4">
             <div className="flex justify-between items-center">
               <span
                 style={{
                   fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase',
-                  color: 'rgba(255,255,255,0.4)',
-                  fontFamily: "var(--font-space), sans-serif",
+                  color: '#c5a880',
+                  fontFamily: "var(--font-jost), sans-serif",
                 }}
               >
                 Size Scale
@@ -490,13 +488,19 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 style={{
                   width: '36px', height: '36px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(255,255,255,0.05)',
+                  background: 'rgba(255,255,255,0.04)',
                   border: '1px solid rgba(255,255,255,0.1)',
                   color: '#fff', fontSize: '16px',
-                  transition: 'background 0.2s',
+                  transition: 'all 0.2s',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                  e.currentTarget.style.borderColor = '#c5a880';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                }}
               >
                 −
               </button>
@@ -512,33 +516,38 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 style={{
                   width: '36px', height: '36px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(255,255,255,0.05)',
+                  background: 'rgba(255,255,255,0.04)',
                   border: '1px solid rgba(255,255,255,0.1)',
                   color: '#fff', fontSize: '16px',
-                  transition: 'background 0.2s',
+                  transition: 'all 0.2s',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                  e.currentTarget.style.borderColor = '#c5a880';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                }}
               >
                 +
               </button>
             </div>
           </div>
 
-          {/* Position — Height */}
           <div className="flex flex-col gap-4">
             <span
               style={{
                 fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.4)',
-                fontFamily: "var(--font-space), sans-serif",
+                color: '#c5a880',
+                fontFamily: "var(--font-jost), sans-serif",
               }}
             >
               Position &amp; Height Fitting
             </span>
 
             <div className="flex flex-col gap-2">
-              <div className="flex justify-between" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>
+              <div className="flex justify-between" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
                 <span>Height (Up / Down)</span>
                 <span style={{ fontFamily: 'monospace', color: '#fff' }}>
                   {offsetY > 2 ? `+${offsetY - 2}` : offsetY - 2}
@@ -553,7 +562,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             </div>
 
             <div className="flex flex-col gap-2">
-              <div className="flex justify-between" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>
+              <div className="flex justify-between" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
                 <span>Sideways (In / Out)</span>
                 <span style={{ fontFamily: 'monospace', color: '#fff' }}>
                   {offsetX > -28 ? `+${offsetX + 28}` : offsetX + 28}
@@ -569,7 +578,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           </div>
         </div>
 
-        {/* CTA */}
         <div className="px-8 pb-8">
           <button
             className="btn-ar"

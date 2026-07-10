@@ -7,8 +7,18 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 interface ModelViewerProps {
   modelPath: string;
-  /** Shown instead of the canvas if the GLB fails to load */
   fallbackImage?: string;
+  modelRotation?: readonly [number, number, number];
+  pair?: boolean;
+}
+
+function normalizeToUnit(object: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  if (Number.isFinite(maxDim) && maxDim > 0) object.scale.multiplyScalar(1 / maxDim);
+  const box2 = new THREE.Box3().setFromObject(object);
+  object.position.sub(box2.getCenter(new THREE.Vector3()));
 }
 
 function enhanceMaterials(root: THREE.Object3D, modelPath: string) {
@@ -39,18 +49,18 @@ function enhanceMaterials(root: THREE.Object3D, modelPath: string) {
         m.envMapIntensity = 2.6;
         if (m.color && (name.includes('gold') || goldModel)) m.color.setHex(0xffd700);
       }
+      if ('side' in m) m.side = THREE.DoubleSide;
       m.needsUpdate = true;
     }
   });
 }
 
-export default function ModelViewer({ modelPath, fallbackImage }: ModelViewerProps) {
+export default function ModelViewer({ modelPath, fallbackImage, modelRotation, pair = false }: ModelViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [inView, setInView] = useState(false);
+  const rotKey = modelRotation ? modelRotation.join(',') : '';
 
-  /* Only run a WebGL context while the viewer is (near) the viewport —
-     the catalog mounts many of these at once. */
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -97,7 +107,7 @@ export default function ModelViewer({ modelPath, fallbackImage }: ModelViewerPro
     scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
     const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 50);
-    camera.position.set(0, 0.04, 2.3);
+    camera.position.set(0, 0.04, 2.9);
     camera.lookAt(0, 0, 0);
 
     const pivot = new THREE.Group();
@@ -115,7 +125,6 @@ export default function ModelViewer({ modelPath, fallbackImage }: ModelViewerPro
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
-    /* Drag to rotate; slow auto-spin otherwise */
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
@@ -150,49 +159,53 @@ export default function ModelViewer({ modelPath, fallbackImage }: ModelViewerPro
     new GLTFLoader().loadAsync(modelPath)
       .then((gltf) => {
         if (disposed) return;
-        const root = gltf.scene;
+        let object: THREE.Object3D = gltf.scene;
 
-        // Jewellery GLBs come in all authoring orientations. Two corrections:
-        // 1) lying flat (thin in Y) → tip upright to face the camera
-        // 2) long axis pointing sideways (e.g. drop earrings authored along X)
-        //    → stand the long axis vertical so pieces hang the way they're worn
-        let box = new THREE.Box3().setFromObject(root);
-        let size = box.getSize(new THREE.Vector3());
-        if (size.y * 1.15 < size.x && size.y * 1.15 < size.z) {
-          root.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-          root.updateMatrixWorld(true);
-          box = new THREE.Box3().setFromObject(root);
-          size = box.getSize(new THREE.Vector3());
-        }
-        if (size.x > size.y * 1.3 && size.x > size.z * 1.3) {
-          root.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
-          root.updateMatrixWorld(true);
-          box = new THREE.Box3().setFromObject(root);
-          size = box.getSize(new THREE.Vector3());
+        if (modelRotation) {
+          object.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(modelRotation[0]));
+          object.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(modelRotation[1]));
+          object.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(modelRotation[2]));
+          object.updateMatrixWorld(true);
+        } else {
+          let box = new THREE.Box3().setFromObject(object);
+          let size = box.getSize(new THREE.Vector3());
+          if (size.y * 1.15 < size.x && size.y * 1.15 < size.z) {
+            object.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+            object.updateMatrixWorld(true);
+            box = new THREE.Box3().setFromObject(object);
+            size = box.getSize(new THREE.Vector3());
+          }
+          if (size.x > size.y * 1.3 && size.x > size.z * 1.3) {
+            object.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+            object.updateMatrixWorld(true);
+          }
         }
 
-        const maxDim = Math.max(size.x, size.y, size.z);
-        if (Number.isFinite(maxDim) && maxDim > 0) root.scale.multiplyScalar(1 / maxDim);
-        const box2 = new THREE.Box3().setFromObject(root);
-        root.position.sub(box2.getCenter(new THREE.Vector3()));
-        enhanceMaterials(root, modelPath);
-        pivot.add(root);
+        normalizeToUnit(object);
+
+        if (pair) {
+          const right = object.clone(true);
+          right.scale.x *= -1;
+          object.position.x -= 0.38;
+          right.position.x += 0.38;
+          const group = new THREE.Group();
+          group.add(object, right);
+          normalizeToUnit(group);
+          object = group;
+        }
+
+        enhanceMaterials(object, modelPath);
+        pivot.add(object);
         setStatus('ready');
       })
       .catch(() => {
         if (!disposed) setStatus('failed');
       });
 
-    let last = performance.now();
-    const loop = (now: number) => {
+    const loop = () => {
       if (disposed) return;
       raf = requestAnimationFrame(loop);
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      if (!dragging) {
-        pivot.rotation.y += 0.35 * dt;
-        tiltTarget = THREE.MathUtils.lerp(tiltTarget, 0, 0.02);
-      }
+      if (!dragging) tiltTarget = THREE.MathUtils.lerp(tiltTarget, 0, 0.02);
       pivot.rotation.x = THREE.MathUtils.lerp(pivot.rotation.x, tiltTarget, 0.12);
       renderer.render(scene, camera);
     };
@@ -219,7 +232,7 @@ export default function ModelViewer({ modelPath, fallbackImage }: ModelViewerPro
       renderer.dispose();
       canvas.remove();
     };
-  }, [modelPath, inView]);
+  }, [modelPath, inView, pair, rotKey]);
 
   return (
     <div ref={containerRef} className="relative w-full h-full">
