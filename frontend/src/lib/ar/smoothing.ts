@@ -44,6 +44,120 @@ export class SmoothVec3 {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   One Euro Filter — standard face-AR smoothing.
+   Filters jitter hard at low velocity but follows fast motion
+   with little lag (adaptive cutoff = minCutoff + beta·|velocity|).
+────────────────────────────────────────────────────────────── */
+
+class LowPass {
+  constructor() {
+    this.initialized = false;
+    this.y = 0;
+  }
+  filter(x, alpha) {
+    if (!this.initialized) {
+      this.initialized = true;
+      this.y = x;
+      return x;
+    }
+    this.y = alpha * x + (1 - alpha) * this.y;
+    return this.y;
+  }
+  reset() {
+    this.initialized = false;
+  }
+}
+
+function oneEuroAlpha(cutoff, dt) {
+  const tau = 1 / (2 * Math.PI * Math.max(1e-6, cutoff));
+  return 1 / (1 + tau / Math.max(1e-4, dt));
+}
+
+export class OneEuro {
+  constructor({ minCutoff = 1.0, beta = 0.007, dCutoff = 1.0 } = {}) {
+    this.minCutoff = minCutoff;
+    this.beta = beta;
+    this.dCutoff = dCutoff;
+    this._x = new LowPass();
+    this._dx = new LowPass();
+    this._prevRaw = null;
+  }
+
+  filter(value, dt) {
+    const rawVel = this._prevRaw === null ? 0 : (value - this._prevRaw) / Math.max(1e-4, dt);
+    this._prevRaw = value;
+    const smoothVel = this._dx.filter(rawVel, oneEuroAlpha(this.dCutoff, dt));
+    const cutoff = this.minCutoff + this.beta * Math.abs(smoothVel);
+    return this._x.filter(value, oneEuroAlpha(cutoff, dt));
+  }
+
+  reset() {
+    this._x.reset();
+    this._dx.reset();
+    this._prevRaw = null;
+  }
+}
+
+export class OneEuroVec3 {
+  constructor(options) {
+    this._fx = new OneEuro(options);
+    this._fy = new OneEuro(options);
+    this._fz = new OneEuro(options);
+    this.value = new THREE.Vector3();
+  }
+
+  filter(v, dt) {
+    this.value.set(
+      this._fx.filter(v.x, dt),
+      this._fy.filter(v.y, dt),
+      this._fz.filter(v.z, dt)
+    );
+    return this.value;
+  }
+
+  reset() {
+    this._fx.reset();
+    this._fy.reset();
+    this._fz.reset();
+  }
+}
+
+export class OneEuroQuat {
+  constructor({ minCutoff = 1.0, beta = 0.5, dCutoff = 1.0 } = {}) {
+    this.minCutoff = minCutoff;
+    this.beta = beta;
+    this.dCutoff = dCutoff;
+    this.value = new THREE.Quaternion();
+    this._prevTarget = new THREE.Quaternion();
+    this._vel = new LowPass();
+    this._initialized = false;
+  }
+
+  filter(q, dt) {
+    if (!this._initialized) {
+      this._initialized = true;
+      this.value.copy(q);
+      this._prevTarget.copy(q);
+      return this.value;
+    }
+    // Angular velocity between consecutive raw targets (radians/s)
+    const dot = Math.min(1, Math.abs(q.dot(this._prevTarget)));
+    const angVel = (2 * Math.acos(dot)) / Math.max(1e-4, dt);
+    this._prevTarget.copy(q);
+
+    const smoothVel = this._vel.filter(angVel, oneEuroAlpha(this.dCutoff, dt));
+    const cutoff = this.minCutoff + this.beta * smoothVel;
+    this.value.slerp(q, oneEuroAlpha(cutoff, dt));
+    return this.value;
+  }
+
+  reset() {
+    this._initialized = false;
+    this._vel.reset();
+  }
+}
+
 export class SmoothQuat {
   constructor() {
     this.value = new THREE.Quaternion();

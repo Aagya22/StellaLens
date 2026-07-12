@@ -1,90 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Product } from '@/data/products';
+import { PRODUCTS, Product } from '@/data/products';
 
-interface RedesignProduct {
-  id: string;
-  name: string;
-  category: 'earrings' | 'necklaces' | 'bracelets' | 'rings';
-  price: number;
-  subtitle: string;
-  arEnabled: boolean;
-}
-
-const REDESIGN_PRODUCTS: RedesignProduct[] = [
-  {
-    id: 'aurelia_studs',
-    name: 'Aurelia Studs',
-    category: 'earrings',
-    price: 4200,
-    subtitle: '1.5ct Round Brilliant Diamonds',
-    arEnabled: true,
-  },
-  {
-    id: 'celestial_cascade',
-    name: 'Celestial Cascade',
-    category: 'necklaces',
-    price: 18500,
-    subtitle: 'Pear-cut Diamond Collar',
-    arEnabled: true,
-  },
-  {
-    id: 'the_gilded_link',
-    name: 'The Gilded Link',
-    category: 'bracelets',
-    price: 7800,
-    subtitle: '18k Yellow Gold & Pave Diamond',
-    arEnabled: true,
-  },
-  {
-    id: 'elysian_solitaire',
-    name: 'Elysian Solitaire',
-    category: 'rings',
-    price: 24000,
-    subtitle: '3ct Round Brilliant Platinum Setting',
-    arEnabled: true,
-  },
-  {
-    id: 'midnight_dew_drop',
-    name: 'Midnight Dew Drop',
-    category: 'necklaces',
-    price: 12400,
-    subtitle: 'Ceylon Sapphire & Diamond Pendant',
-    arEnabled: true,
-  },
-  {
-    id: 'verdant_drops',
-    name: 'Verdant Drops',
-    category: 'earrings',
-    price: 5600,
-    subtitle: 'Colombian Emeralds in 18k Gold',
-    arEnabled: true,
-  },
-  {
-    id: 'luna_stack',
-    name: 'Luna Stack',
-    category: 'rings',
-    price: 3900,
-    subtitle: 'Interlocking White Gold Bands',
-    arEnabled: true,
-  },
-  {
-    id: 'the_atelier_piece',
-    name: 'The Atelier Piece',
-    category: 'bracelets',
-    price: 14500,
-    subtitle: 'Custom Designed to Specification',
-    arEnabled: false,
-  },
-];
-
-const CATEGORY_LABELS = {
-  earrings: 'HIGH JEWELRY',
-  necklaces: 'HERITAGE',
-  bracelets: 'COLLECTIONS',
-  rings: 'BESPOKE',
-};
+/** Numeric value of a "$1,250" price string, for sorting */
+const priceValue = (p: Product) => Number(p.price.replace(/[^0-9.]/g, '')) || 0;
 
 interface JewelrySectionProps {
   activeTab: 'home' | 'jewelry' | 'about';
@@ -106,13 +26,13 @@ export default function JewelrySection({
 
   if (activeTab !== 'jewelry') return null;
 
-  const filtered = REDESIGN_PRODUCTS.filter((p) => {
+  const filtered = PRODUCTS.filter((p) => {
     return selectedCat === 'all' || p.category === selectedCat;
   });
 
   const sorted = [...filtered].sort((a, b) => {
-    if (sortBy === 'low-high') return a.price - b.price;
-    if (sortBy === 'high-low') return b.price - a.price;
+    if (sortBy === 'low-high') return priceValue(a) - priceValue(b);
+    if (sortBy === 'high-low') return priceValue(b) - priceValue(a);
     return 0;
   });
 
@@ -210,7 +130,7 @@ export default function JewelrySection({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-16 justify-center justify-items-center relative z-10">
           {sorted.map((product) => (
-            <div key={product.id} className="group flex flex-col items-center text-center gap-4 animate-fade-in max-w-[220px] w-full mx-auto">
+            <div key={product.id} className="group flex flex-col items-center text-center gap-4 animate-fade-in max-w-[220px] w-full min-w-0 mx-auto">
               <div className="relative w-full aspect-square bg-[#ffffff] border border-black/5 flex items-center justify-center transition-all duration-300 group-hover:border-[#c5a880]/30 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)]">
                 <div className="absolute top-3 left-3 w-3 h-3 pointer-events-none" style={{ borderTop: '1px solid rgba(197,168,128,0.25)', borderLeft: '1px solid rgba(197,168,128,0.25)' }} />
                 <div className="absolute top-3 right-3 w-3 h-3 pointer-events-none" style={{ borderTop: '1px solid rgba(197,168,128,0.25)', borderRight: '1px solid rgba(197,168,128,0.25)' }} />
@@ -228,7 +148,7 @@ export default function JewelrySection({
                 </div>
               </div>
 
-              <div className="flex flex-col items-center gap-1 mt-2">
+              <div className="w-full min-w-0 flex flex-col items-center gap-1 mt-2">
                 <h3 
                   className="tracking-wide font-normal"
                   style={{
@@ -243,8 +163,8 @@ export default function JewelrySection({
                   {product.name}
                 </h3>
                 
-                <p 
-                  className="font-light italic"
+                <p
+                  className="font-light italic truncate w-full"
                   style={{
                     fontFamily: "var(--font-jost), sans-serif",
                     color: '#767676',
@@ -252,10 +172,10 @@ export default function JewelrySection({
                     marginTop: '2px',
                   }}
                 >
-                  {product.subtitle}
+                  {product.description}
                 </p>
-                
-                <span 
+
+                <span
                   className="tracking-widest font-semibold mt-1.5"
                   style={{
                     fontFamily: "var(--font-jost), sans-serif",
@@ -263,25 +183,13 @@ export default function JewelrySection({
                     fontSize: '14px',
                   }}
                 >
-                  ${product.price.toLocaleString()}
+                  {product.price}
                 </span>
               </div>
 
               {product.arEnabled && (
                 <button
-                  onClick={() => {
-                    const mappedProduct: Product = {
-                      id: product.id,
-                      name: product.name,
-                      category: product.category,
-                      price: `$${product.price.toLocaleString()}`,
-                      description: product.subtitle,
-                      modelPath: `/models/${product.category}/${product.id}.glb`,
-                      arEnabled: true,
-                      image: `/images/${product.category}1.png`,
-                    };
-                    setActiveArProduct(mappedProduct);
-                  }}
+                  onClick={() => setActiveArProduct(product)}
                   className="mt-2 cursor-pointer text-[9px] tracking-[0.22em] uppercase text-[#c5a880] hover:text-black border-b border-[#c5a880]/30 hover:border-black transition-all duration-300 pb-0.5"
                 >
                   Try On Live

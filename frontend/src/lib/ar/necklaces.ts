@@ -30,20 +30,6 @@ function computeAlpha(dtSeconds, halfLifeSeconds) {
   return 1 - k;
 }
 
-function createFallbackNecklaceMesh() {
-  const geo = new THREE.TorusGeometry(1.0, 0.05, 16, 96, Math.PI);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffd700,
-    metalness: 1.0,
-    roughness: 0.32,
-  });
-  mat.envMapIntensity = 1.6;
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.x = Math.PI / 2;
-  mesh.rotation.z = Math.PI;
-  return mesh;
-}
-
 function normalizeModelToUnit(root) {
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
@@ -109,8 +95,8 @@ export class NecklaceSystem {
       this.modelContainer.add(root);
       this.onStatus("");
     } catch {
-      this.onStatus("Failed to load GLB; using fallback geometry.");
-      this.modelContainer.add(createFallbackNecklaceMesh());
+      // No placeholder geometry — showing nothing beats showing a wrong chain.
+      this.onStatus("Couldn't load this piece's 3D model.");
     }
   }
 

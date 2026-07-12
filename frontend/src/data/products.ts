@@ -10,6 +10,41 @@ export interface Product {
   customizeColors?: boolean;
   modelRotation?: [number, number, number];
   pair?: boolean;
+  /** Render the GLB's authored materials exactly as-is */
+  preserveMaterials?: boolean;
+  /** Per-model ear-anchor calibration (canonical cm).  */
+  earAnchor?: {
+    userRight: { lateral: number; down: number; back: number };
+    userLeft: { lateral: number; down: number; back: number };
+  };
+  
+  dangle?: {
+    stiffness?: number;
+    damping?: number;
+    maxSwingDeg?: number;
+    response?: number;
+    pivotDrop?: number;
+    yawFollow?: number;
+  };
+  
+  skinPenetration?: number;
+  /** AR fit per model: orientation correction (degrees, applied before the
+      pivot is computed) and a size multiplier on the shared base scale */
+  arFit?: {
+    rotationDeg?: [number, number, number];
+    scale?: number;
+  };
+  
+  arMaterials?: Array<{
+    match: string;
+    hide?: boolean;
+    color?: string;
+    metalness?: number;
+    roughness?: number;
+    clearcoat?: number;
+    clearcoatRoughness?: number;
+    envMapIntensity?: number;
+  }>;
 }
 
 export const PRODUCTS: Product[] = [
@@ -24,7 +59,16 @@ export const PRODUCTS: Product[] = [
     image: "/images/earrings1.png",
     customizeColors: true,
     modelRotation: [90, 0, 0],
-    pair: true
+    pair: true,
+    preserveMaterials: true,
+    // Hook levers slightly around the piercing at large swings
+    dangle: { pivotDrop: 0.2 },      // dangler → default yawFollow 0.2
+    skinPenetration: 0.5,            // hook tip into the lobe
+    // Calibrated live 2026-07-12
+    earAnchor: {
+      userRight: { lateral: 7.8, down: 4.1, back: 4.2 },
+      userLeft:  { lateral: 8.6, down: 4.0, back: 3.9 }
+    }
   },
   {
     id: "earring_gold_hoop",
@@ -32,9 +76,20 @@ export const PRODUCTS: Product[] = [
     category: "earrings",
     price: "$650",
     description: "Classic huggie hoops forged from solid 18k yellow gold, with a high-polish mirror finish and a comfort-fit clasp.",
-    modelPath: "/models/earrings/lunette_gold_hoops.glb",
+    modelPath: "/models/earrings/gold_hoop_clean.glb",
     arEnabled: true,
-    image: "/images/earrings2.png"
+    image: "/images/earrings2.png",
+    
+    pair: true,
+    preserveMaterials: true,
+    
+    arFit: { rotationDeg: [0, 0, 0], scale: 1.2 },
+    skinPenetration: 0.5,
+    // Calibrated live 2026-07-12
+    earAnchor: {
+      userRight: { lateral: 7.9, down: 1.8, back: 3.7 },
+      userLeft:  { lateral: 8.9, down: 2.0, back: 3.8 }
+    }
   },
   {
     id: "earring_selene",
@@ -44,7 +99,21 @@ export const PRODUCTS: Product[] = [
     description: "Round studs in solid gold, sized to catch the light without the weight — the everyday pair.",
     modelPath: "/models/earrings/selene_studs.glb",
     arEnabled: true,
-    image: "/images/earrings1.png"
+    image: "/images/earrings1.png",
+    preserveMaterials: true,
+    // Studs are rigid to the lobe: full yaw follow, no swing.
+    dangle: { yawFollow: 1.0, maxSwingDeg: 0 },
+    skinPenetration: 1.5, // post fully hidden, gem sits flush on the lobe
+    // Calibrated live 2026-07-12
+    earAnchor: {
+      userRight: { lateral: 8.6, down: 1.5, back: 3.5 },
+      userLeft:  { lateral: 7.8, down: 1.8, back: 3.9 }
+    },
+    
+    arMaterials: [
+      { match: "plat",   color: "#D9B96A", metalness: 1.0,  roughness: 0.3, envMapIntensity: 1.4 },
+      { match: "mat245", color: "#f7f4ee", metalness: 0.05, roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.25 }
+    ]
   },
   {
     id: "earring_nova",
@@ -54,7 +123,13 @@ export const PRODUCTS: Product[] = [
     description: "Slender drop earrings in polished gold, made to move with every turn of the head.",
     modelPath: "/models/earrings/nova_drops.glb",
     arEnabled: true,
-    image: "/images/earrings1.png"
+    image: "/images/earrings1.png",
+    // The GLB is a SINGLE earring (cube + gem sphere + torus assembly).
+    pair: true,
+    preserveMaterials: true,
+   
+    arFit: { rotationDeg: [90, 90, 0], scale: 1.4 },
+    skinPenetration: 0.5 // dangler → default yawFollow 0.2, hook tip into lobe
   },
   {
     id: "necklace_orlaith",

@@ -12,7 +12,7 @@ interface OrderModalProps {
     customizations: {
       topGem?: string;
       bottomGem?: string;
-      scale: string;
+      scale?: string;
     };
   } | null;
 }
@@ -158,7 +158,7 @@ export default function OrderModal({ isOpen, onClose, orderDetails }: OrderModal
                   Your Configuration
                 </span>
                 {[
-                  { label: 'Fitting Scale', value: `${orderDetails.customizations.scale}×` },
+                  orderDetails.customizations.scale && { label: 'Fitting Scale', value: `${orderDetails.customizations.scale}×` },
                   orderDetails.customizations.topGem && { label: 'Top Gem', value: orderDetails.customizations.topGem },
                   orderDetails.customizations.bottomGem && { label: 'Bottom Gem', value: orderDetails.customizations.bottomGem },
                 ].filter(Boolean).map((row: any) => (

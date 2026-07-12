@@ -19,6 +19,18 @@ interface ARViewProps {
   onOpenOrderModal: (customizations: any) => void;
 }
 
+/* Fixed fit applied to every earring. Screen-space offsets are ZERO on
+   purpose: placement is now fully owned by the matrix-transformed
+   EAR_ANCHOR (canonical cm) in lib/ar/earrings.ts — post-hoc screen
+   nudges would break again under rotation. */
+const EARRING_FIT = {
+  offsetX: 0,
+  offsetY: 0,
+  offsetZ: 0,
+  scaleMultiplier: 0.65,
+  smoothingFactor: 0.55,
+};
+
 const GEM_MAP = {
   ruby:     '#ff1c6b',
   emerald:  '#00ff73',
@@ -47,11 +59,43 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   const canvasRef    = useRef<HTMLCanvasElement>(null);
 
   const [loadingMsg,    setLoadingMsg]    = useState('Starting camera...');
-  const [scale,         setScale]         = useState(0.65);
   const [topGemColor,   setTopGemColor]   = useState(GEM_MAP.ruby);
   const [bottomGemColor,setBottomGemColor]= useState(GEM_MAP.tanzanite);
-  const [offsetX,       setOffsetX]       = useState(-28);
-  const [offsetY,       setOffsetY]       = useState(2);
+
+  /* Gem swatches must not repaint a preserved model until actually clicked */
+  const gemsTouched = useRef(false);
+
+  /* ── TEMPORARY: per-product ear-anchor calibration (canonical cm).
+     */
+  const [calibEar, setCalibEar] = useState<'userRight' | 'userLeft'>('userRight');
+  const [, setCalibTick] = useState(0);
+
+  useEffect(() => {
+    if (product.category !== 'earrings') return;
+    const onKey = (e: KeyboardEvent) => {
+      const anchor = earringsRef.current?.getAnchor();
+      if (!anchor) return;
+      const step = 0.1 * (e.shiftKey ? 4 : 1); // centimeters
+      const o = anchor[calibEar];
+      let handled = true;
+      switch (e.key.toLowerCase()) {
+        case 'a': o.lateral -= step; break; // toward face center
+        case 'd': o.lateral += step; break; // outward
+        case 'w': o.down    -= step; break; // up
+        case 's': o.down    += step; break; // down
+        case 'r': o.back    -= step; break; // toward camera
+        case 'f': o.back    += step; break; // behind face plane
+        case 't': setCalibEar(prev => (prev === 'userRight' ? 'userLeft' : 'userRight')); break;
+        default: handled = false;
+      }
+      if (handled) {
+        e.preventDefault();
+        setCalibTick(t => t + 1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [product, calibEar]);
 
   const requestRef  = useRef<number | null>(null);
   const trackerRef  = useRef<FaceTracker | null>(null);
@@ -114,11 +158,15 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
         renderer.setClearColor(0x000000, 0);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.25;
+        //  Neutral keeps the gold gold.
+        renderer.toneMapping = THREE.NeutralToneMapping;
+        renderer.toneMappingExposure = 1.0;
         scene = new THREE.Scene();
         const pmrem = new THREE.PMREMGenerator(renderer);
         scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+        // Neutral-ish env level so authored materials render close to how
+        // they look in a Blender studio viewport (not blown out).
+        scene.environmentIntensity = 1.15;
 
         const ambient = new THREE.AmbientLight(0xffffff, 0.25); scene.add(ambient); ambientRef.current = ambient;
         const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(200, 400, 600); scene.add(key); keyRef.current = key;
@@ -131,7 +179,11 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         window.addEventListener('resize', resizeRenderer);
 
         setLoadingMsg('Loading Face AI Models...');
-        const tracker = new FaceTracker(); await tracker.init(); trackerRef.current = tracker;
+        const tracker = new FaceTracker();
+        await tracker.init();
+
+        if (!active) { tracker.dispose(); return; }
+        trackerRef.current = tracker;
 
         occluderRef.current = new FaceOccluder({ scene });
         const gltfLoader = new GLTFLoader();
@@ -141,7 +193,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         setLoadingMsg('Loading 3D Product...');
         earringsRef.current.setVisible(product.category === 'earrings');
         necklacesRef.current.setVisible(product.category === 'necklaces');
-        if (product.category === 'earrings') await earringsRef.current.loadModel(product.modelPath);
+        if (product.category === 'earrings') await earringsRef.current.loadModel(product.modelPath, { singleEarring: product.pair === true, preserveMaterials: product.preserveMaterials === true, anchor: product.earAnchor, dangle: product.dangle, fit: product.arFit, materials: product.arMaterials, skinPenetration: product.skinPenetration });
         else await necklacesRef.current.loadModel(product.modelPath);
         setLoadingMsg('');
 
@@ -155,7 +207,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           requestRef.current = requestAnimationFrame(loop);
           const dtSeconds = Math.min(0.05, (now - lastNow) / 1000); lastNow = now;
           const video = videoRef.current;
-          if (video && video.readyState >= 2 && tracker.ready) {
+          if (video && video.readyState >= 2 && video.videoWidth > 0 && tracker.ready) {
             frameCount++;
             if (frameCount % 12 === 0 && offscreenCtx) {
               try {
@@ -176,7 +228,11 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               catch (e) { console.error(e); det = null; }
             }
             if (det) {
+              // Face re-found: restore visibility (it's cleared on dropout below,
+              // and must come back or the jewellery vanishes permanently).
               occluderRef.current?.setVisible(true);
+              earringsRef.current?.setVisible(product.category === 'earrings');
+              necklacesRef.current?.setVisible(product.category === 'necklaces');
               const headPose = estimateHeadPose(det.poseMatrix), poseQuat = headPose.quaternion;
               const leftEar = leftEarAnchor.compute(det.landmarks), rightEar = rightEarAnchor.compute(det.landmarks);
               let anchorsVal = { left: leftEar, right: rightEar };
@@ -184,7 +240,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               const faceWidthPx = Math.abs(anchorsVal.right.x - anchorsVal.left.x) * view.videoW * view.cover.scale;
               occluderRef.current?.update({ landmarks: det.landmarks, view, faceWidthPx, zBias: 25 });
               if (product.category === 'earrings' && earringsRef.current) {
-                earringsRef.current.update({ anchors: anchorsVal, landmarks: det.landmarks, view, faceWidthPx, poseQuat, headPose, settings: { offsetX, offsetY, offsetZ: 12, scaleMultiplier: scale, smoothingFactor: 0.55 }, dtSeconds });
+                earringsRef.current.update({ anchors: anchorsVal, landmarks: det.landmarks, view, faceWidthPx, poseQuat, poseMatrix: det.poseMatrix, headPose, settings: EARRING_FIT, dtSeconds });
               } else if (product.category === 'necklaces' && necklacesRef.current) {
                 necklacesRef.current.update({ anchors: { chin: det.chin, jawLeft: det.jawLeft, jawRight: det.jawRight, neck: det.neck }, view, jawWidthPx: faceWidthPx, poseQuat, dtSeconds });
               }
@@ -215,9 +271,10 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       necklacesRef.current?.dispose();
       if (renderer) renderer.dispose();
     };
-  }, [product, scale, offsetX, offsetY]);
+  }, [product]);
 
   useEffect(() => {
+    if (!gemsTouched.current) return; // don't repaint authored materials on mount
     if (product.category === 'earrings' && earringsRef.current) {
       earringsRef.current.setGemColors(topGemColor, bottomGemColor);
     }
@@ -231,8 +288,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       customizations: product.customizeColors ? {
         topGem:    Object.keys(GEM_MAP).find(k => GEM_MAP[k as keyof typeof GEM_MAP] === topGemColor)    || 'ruby',
         bottomGem: Object.keys(GEM_MAP).find(k => GEM_MAP[k as keyof typeof GEM_MAP] === bottomGemColor) || 'tanzanite',
-        scale: scale.toFixed(2),
-      } : { scale: scale.toFixed(2) },
+      } : {},
     });
   };
 
@@ -307,6 +363,38 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           Back
         </button>
 
+        {/* ── TEMPORARY calibration readout (per product, canonical cm) ── */}
+        {product.category === 'earrings' && (() => {
+          const anchor = earringsRef.current?.getAnchor();
+          const o = anchor?.[calibEar];
+          return (
+            <div
+              className="absolute top-5 right-5 z-20 flex flex-col gap-1.5"
+              style={{
+                background: 'rgba(0,0,0,0.78)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                padding: '12px 16px',
+                fontFamily: 'monospace',
+                fontSize: '11px',
+                color: '#fff',
+                lineHeight: 1.5,
+              }}
+            >
+              <span style={{ color: '#c5a880', letterSpacing: '0.12em' }}>
+                CALIBRATION · {product.name.toUpperCase()}
+              </span>
+              <span style={{ color: '#c5a880' }}>
+                {calibEar === 'userRight' ? 'YOUR RIGHT EAR' : 'YOUR LEFT EAR'}
+              </span>
+              <span>lateral A/D : {o ? `${o.lateral.toFixed(1)} cm` : '—'}</span>
+              <span>down&nbsp;&nbsp;&nbsp; W/S : {o ? `${o.down.toFixed(1)} cm` : '—'}</span>
+              <span>back&nbsp;&nbsp;&nbsp; R/F : {o ? `${o.back.toFixed(1)} cm` : '—'}</span>
+              <span style={{ opacity: 0.55 }}>T switch ear · Shift ×4 step</span>
+            </div>
+          );
+        })()}
+
+
         <div
           className="absolute bottom-5 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-20 w-[300px]"
           style={{
@@ -339,7 +427,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                     return (
                       <button
                         key={name}
-                        onClick={() => setTopGemColor(color)}
+                        onClick={() => { gemsTouched.current = true; setTopGemColor(color); }}
                         title={name}
                         className="cursor-pointer"
                         style={{
@@ -368,7 +456,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                     return (
                       <button
                         key={name}
-                        onClick={() => setBottomGemColor(color)}
+                        onClick={() => { gemsTouched.current = true; setBottomGemColor(color); }}
                         title={name}
                         className="cursor-pointer"
                         style={{
@@ -459,124 +547,8 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           </p>
         </div>
 
-        <div className="flex-1 px-8 py-7 flex flex-col gap-8">
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <span
-                style={{
-                  fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase',
-                  color: '#c5a880',
-                  fontFamily: "var(--font-jost), sans-serif",
-                }}
-              >
-                Size Scale
-              </span>
-              <span
-                style={{
-                  fontFamily: 'monospace', fontSize: '12px',
-                  color: '#fff', letterSpacing: '0.05em',
-                }}
-              >
-                {scale.toFixed(2)}×
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setScale(prev => Math.max(0.60, prev - 0.01))}
-                className="cursor-pointer flex-shrink-0"
-                style={{
-                  width: '36px', height: '36px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#fff', fontSize: '16px',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                  e.currentTarget.style.borderColor = '#c5a880';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                }}
-              >
-                −
-              </button>
-              <input
-                type="range" min="0.60" max="0.70" step="0.01"
-                value={scale}
-                onChange={e => setScale(parseFloat(e.target.value))}
-                className="range-dark flex-1"
-              />
-              <button
-                onClick={() => setScale(prev => Math.min(0.70, prev + 0.01))}
-                className="cursor-pointer flex-shrink-0"
-                style={{
-                  width: '36px', height: '36px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#fff', fontSize: '16px',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                  e.currentTarget.style.borderColor = '#c5a880';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                }}
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <span
-              style={{
-                fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase',
-                color: '#c5a880',
-                fontFamily: "var(--font-jost), sans-serif",
-              }}
-            >
-              Position &amp; Height Fitting
-            </span>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
-                <span>Height (Up / Down)</span>
-                <span style={{ fontFamily: 'monospace', color: '#fff' }}>
-                  {offsetY > 2 ? `+${offsetY - 2}` : offsetY - 2}
-                </span>
-              </div>
-              <input
-                type="range" min="-18" max="22" step="1"
-                value={offsetY}
-                onChange={e => setOffsetY(parseInt(e.target.value))}
-                className="range-dark"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
-                <span>Sideways (In / Out)</span>
-                <span style={{ fontFamily: 'monospace', color: '#fff' }}>
-                  {offsetX > -28 ? `+${offsetX + 28}` : offsetX + 28}
-                </span>
-              </div>
-              <input
-                type="range" min="-48" max="-8" step="1"
-                value={offsetX}
-                onChange={e => setOffsetX(parseInt(e.target.value))}
-                className="range-dark"
-              />
-            </div>
-          </div>
-        </div>
+        {/* Fitting is fixed by the calibrated ear anchor — no manual sliders */}
+        <div className="flex-1" />
 
         <div className="px-8 pb-8">
           <button

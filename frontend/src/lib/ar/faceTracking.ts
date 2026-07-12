@@ -54,11 +54,32 @@ function landmarkAt(landmarks, index) {
   return p;
 }
 
+/**
+ * MediaPipe's WASM runtime routes its internal INFO log lines (e.g.
+ * "INFO: Created TensorFlow Lite XNNPACK delegate for CPU.") through
+ * console.error, which the Next.js dev overlay reports as a real error.
+ * Downgrade only those lines to console.info; everything else passes through.
+ */
+let consolePatched = false;
+function muteMediapipeInfoLogs() {
+  if (consolePatched || typeof console === "undefined") return;
+  consolePatched = true;
+  const nativeError = console.error.bind(console);
+  console.error = (...args) => {
+    if (typeof args[0] === "string" && args[0].startsWith("INFO:")) {
+      console.info(...args);
+      return;
+    }
+    nativeError(...args);
+  };
+}
+
 export class FaceTracker {
   constructor() {
     this._landmarker = null;
     this._ready = false;
     this._lastGoodMatrix = null;
+    this._lastTs = 0;
   }
 
   get ready() {
@@ -67,6 +88,7 @@ export class FaceTracker {
 
   async init() {
     if (this._ready) return;
+    muteMediapipeInfoLogs();
     const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
     try {
       this._landmarker = await FaceLandmarker.createFromOptions(fileset, {
@@ -95,8 +117,23 @@ export class FaceTracker {
   }
 
   detect(video, nowMs) {
-    if (!this._landmarker) return null;
-    const mpResult = this._landmarker.detectForVideo(video, nowMs);
+    if (!this._landmarker || !this._ready) return null;
+    // A frame with no dimensions (camera warming up / stream ended) crashes the graph.
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) return null;
+
+    // detectForVideo requires strictly increasing timestamps per instance.
+    const ts = Math.max(nowMs, this._lastTs + 1);
+    this._lastTs = ts;
+
+    let mpResult;
+    try {
+      mpResult = this._landmarker.detectForVideo(video, ts);
+    } catch (err) {
+      // WASM-side failure (closed graph, bad frame) — skip this frame instead of crashing the loop.
+      console.warn('FaceTracker: skipped frame —', err?.message ?? err);
+      return null;
+    }
+
     const faceLandmarks = mpResult.faceLandmarks?.[0];
     if (!faceLandmarks || faceLandmarks.length === 0) return null;
     const chin = findChin(faceLandmarks);
