@@ -1,11 +1,15 @@
 // @ts-nocheck
 import * as THREE from "three";
+import { FaceLandmarker } from "@mediapipe/tasks-vision";
 
+/* Face-oval perimeter  */
 const FACE_OVAL = [
   10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379,
   378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127,
   162, 21, 54, 103, 67, 109,
 ];
+
+const MAX_VERTS = 478; // 468 mesh + 10 iris (blendshapes model)
 
 function normToStageXY(p, view) {
   const px = p.x * view.videoW;
@@ -23,36 +27,96 @@ function zToPx(zNorm, view) {
   return -zNorm * S;
 }
 
+/**
+ * Reconstruct the face-mesh triangle list from MediaPipe's tessellation,
+ * which ships as an edge list (FACE_LANDMARKS_TESSELATION = [{start,end},…]).
+ * A triangulated surface's faces are exactly its 3-cliques, so we find every
+ * pair of connected vertices that share a common neighbour. Deduped by a
+ * sorted key. Returns a flat index array, or null if the tessellation isn't
+ * exposed by the current package build.
+ */
+function buildTessellationTriangles() {
+  const conns = FaceLandmarker?.FACE_LANDMARKS_TESSELATION;
+  if (!conns || !conns.length) return null;
+
+  const adj = new Map();
+  const addEdge = (a, b) => {
+    let s = adj.get(a);
+    if (!s) { s = new Set(); adj.set(a, s); }
+    s.add(b);
+  };
+  for (const c of conns) {
+    addEdge(c.start, c.end);
+    addEdge(c.end, c.start);
+  }
+
+  const tris = [];
+  const seen = new Set();
+  for (const c of conns) {
+    const a = c.start, b = c.end;
+    const na = adj.get(a), nb = adj.get(b);
+    const [small, big] = na.size <= nb.size ? [na, nb] : [nb, na];
+    for (const cc of small) {
+      if (cc === a || cc === b) continue;
+      if (!big.has(cc)) continue;
+      const key =
+        Math.min(a, b, cc) * 1_000_000 +
+        (a + b + cc - Math.min(a, b, cc) - Math.max(a, b, cc)) * 1000 +
+        Math.max(a, b, cc);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tris.push(a, b, cc);
+    }
+  }
+  return tris.length ? tris : null;
+}
+
 export class FaceOccluder {
   constructor({ scene }) {
     this.scene = scene;
     this.geometry = new THREE.BufferGeometry();
-    const vertexCount = 1 + FACE_OVAL.length;
-    const positions = new Float32Array(vertexCount * 3);
-    this._positions = positions;
-    this.geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const indexCount = FACE_OVAL.length * 3;
-    const indices = new Uint16Array(indexCount);
-    let w = 0;
-    for (let i = 0; i < FACE_OVAL.length; i++) {
-      const a = 0;
-      const b = 1 + i;
-      const c = 1 + ((i + 1) % FACE_OVAL.length);
-      indices[w++] = a;
-      indices[w++] = b;
-      indices[w++] = c;
+
+    const tessTris = buildTessellationTriangles();
+    if (tessTris) {
+      this._mode = "mesh";
+      this._vertexCount = MAX_VERTS;
+      this._positions = new Float32Array(MAX_VERTS * 3);
+      this.geometry.setAttribute("position", new THREE.BufferAttribute(this._positions, 3));
+      this.geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(tessTris), 1));
+    } else {
+      // Fallback: oval fan from a computed centre (previous behaviour).
+      this._mode = "fan";
+      this._vertexCount = 1 + FACE_OVAL.length;
+      this._positions = new Float32Array(this._vertexCount * 3);
+      this.geometry.setAttribute("position", new THREE.BufferAttribute(this._positions, 3));
+      const indices = new Uint16Array(FACE_OVAL.length * 3);
+      let w = 0;
+      for (let i = 0; i < FACE_OVAL.length; i++) {
+        indices[w++] = 0;
+        indices[w++] = 1 + i;
+        indices[w++] = 1 + ((i + 1) % FACE_OVAL.length);
+      }
+      this.geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     }
-    this.geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+    // Depth-only: invisible to color, but writes depth so anything drawn
+    // AFTER it (earrings, renderOrder 1) gets clipped where it's behind the
+    // face. DoubleSide because the reconstructed triangulation has arbitrary
+    // winding — FrontSide would punch random holes in the occluder.
     this.material = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      depthTest: true,
-      depthWrite: true,
       colorWrite: false,
+      depthWrite: true,
+      depthTest: true,
+      side: THREE.DoubleSide,
     });
+
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 0;
+    this.mesh.renderOrder = 0; // before earrings (renderOrder 1)
+    // Static big bounding sphere so three never tries to recompute it.
+    this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
     this.scene.add(this.mesh);
+
     this.visible = true;
   }
 
@@ -61,40 +125,48 @@ export class FaceOccluder {
     this.mesh.visible = v;
   }
 
-  update({ landmarks, view, faceWidthPx, zBias = 25 }) {
+  /**
+   * @param {{ landmarks, view, faceWidthPx?, zBias?: number }} args
+   * zBias nudges the whole surface toward the camera (px) so hooks that sit
+   * right at the skin get reliably caught; too much would clip the gem.
+   */
+  update({ landmarks, view, zBias = 12 }) {
     if (!this.visible) return;
     if (!landmarks || landmarks.length < 468) return;
-    let cx = 0;
-    let cy = 0;
-    let cz = 0;
-    let n = 0;
-    for (const idx of FACE_OVAL) {
-      const p = landmarks[idx];
-      if (!p) continue;
-      const s = normToStageXY(p, view);
-      cx += s.x;
-      cy += s.y;
-      cz += zToPx(p.z, view);
-      n++;
+    const pos = this._positions;
+
+    if (this._mode === "mesh") {
+      const n = Math.min(this._vertexCount, landmarks.length);
+      for (let i = 0; i < n; i++) {
+        const p = landmarks[i];
+        const o = i * 3;
+        if (!p) { pos[o] = pos[o + 1] = pos[o + 2] = 0; continue; }
+        const s = normToStageXY(p, view);
+        pos[o + 0] = s.x;
+        pos[o + 1] = s.y;
+        pos[o + 2] = zToPx(p.z, view) + zBias;
+      }
+    } else {
+      // Fan fallback
+      let cx = 0, cy = 0, cz = 0, cnt = 0;
+      for (const idx of FACE_OVAL) {
+        const p = landmarks[idx];
+        if (!p) continue;
+        const s = normToStageXY(p, view);
+        cx += s.x; cy += s.y; cz += zToPx(p.z, view); cnt++;
+      }
+      if (!cnt) return;
+      pos[0] = cx / cnt; pos[1] = cy / cnt; pos[2] = cz / cnt + zBias;
+      for (let i = 0; i < FACE_OVAL.length; i++) {
+        const p = landmarks[FACE_OVAL[i]];
+        const s = p ? normToStageXY(p, view) : { x: pos[0], y: pos[1] };
+        const z = p ? zToPx(p.z, view) + zBias : pos[2];
+        const o = (1 + i) * 3;
+        pos[o + 0] = s.x; pos[o + 1] = s.y; pos[o + 2] = z;
+      }
     }
-    if (!n) return;
-    cx /= n;
-    cy /= n;
-    cz = cz / n + zBias;
-    this._positions[0] = cx;
-    this._positions[1] = cy;
-    this._positions[2] = cz;
-    for (let i = 0; i < FACE_OVAL.length; i++) {
-      const p = landmarks[FACE_OVAL[i]];
-      const s = p ? normToStageXY(p, view) : { x: cx, y: cy };
-      const z = p ? zToPx(p.z, view) + zBias : cz;
-      const o = (1 + i) * 3;
-      this._positions[o + 0] = s.x;
-      this._positions[o + 1] = s.y;
-      this._positions[o + 2] = z;
-    }
+
     this.geometry.attributes.position.needsUpdate = true;
-    this.geometry.computeBoundingSphere();
   }
 
   dispose() {

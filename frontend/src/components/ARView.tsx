@@ -238,7 +238,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               let anchorsVal = { left: leftEar, right: rightEar };
               if (leftEar.x > rightEar.x) anchorsVal = { left: rightEar, right: leftEar };
               const faceWidthPx = Math.abs(anchorsVal.right.x - anchorsVal.left.x) * view.videoW * view.cover.scale;
-              occluderRef.current?.update({ landmarks: det.landmarks, view, faceWidthPx, zBias: 25 });
+              occluderRef.current?.update({ landmarks: det.landmarks, view, zBias: 12 });
               if (product.category === 'earrings' && earringsRef.current) {
                 earringsRef.current.update({ anchors: anchorsVal, landmarks: det.landmarks, view, faceWidthPx, poseQuat, poseMatrix: det.poseMatrix, headPose, settings: EARRING_FIT, dtSeconds });
               } else if (product.category === 'necklaces' && necklacesRef.current) {
