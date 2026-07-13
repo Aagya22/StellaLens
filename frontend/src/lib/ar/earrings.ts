@@ -61,11 +61,15 @@ const HIDE_ALL_DEG = 57; // beyond this, tracking isn't trustworthy — hide bot
    tracking gaps / tab-switches. Never convert them into a swing kick. */
 const TELEPORT_SPEED = 5000; // px/s
 
+const DANGLE_FORCE_OSCILLATION = false;
+const DANGLE_DEBUG_PIVOT = false;
+const DANGLE_DEBUG_ACCEL = true; // log |accel| fed to the spring
+
 export const DANGLE_DEFAULTS = {
   stiffness: 120,    // spring pull toward hanging straight down
   damping: 8,        // angular damping — higher settles the swing faster
   maxSwingDeg: 40,   // swing clamp
-  response: 0.004,   // how strongly anchor motion drives the swing
+  response: 0.05,    // how strongly anchor motion drives the swing (tune 0.01–0.05)
   pivotDrop: 0,      // fraction of model height to lower the swing pivot
                      // below the ear-wire contact point (hook stays rigid-ish)
   yawFollow: 0.2,    // 0–1: fraction of head yaw the earring turns with.
@@ -78,6 +82,26 @@ export const DANGLE_DEFAULTS = {
 const MP_VERTICAL_FOV_DEG = 63;
 /* Canonical outer-eye-corner distance (cm) — converts canonical depth to px */
 const CANONICAL_INTEROCULAR_CM = 9.0;
+
+/* One Euro filter tuning for the RENDERED earring transform (position +
+   rotation). NOT the visibility yaw, which stays raw for zero-lag fade.
+   minCutoff: lower = smoother when the head is still (less jitter).
+   beta:      higher = less lag when the head moves (more responsive).
+   One filter instance per earring — left/right never share state. */
+const EARRING_MIN_CUTOFF = 1.0;
+const EARRING_BETA = 0.05;
+
+/* Per-user face-width adaptation. The inner-eye-corner distance (133↔362,
+   normalized) measured during the calibration session; each frame the
+   lateral (X) and back (Z) anchor offsets scale by current/reference so a
+   wider face gets the ear offset proportionally further out — no per-user
+   recalibration. Y (earlobe height) is left fixed (weak width correlation).
+   The measured value is logged once per session — read it from the console
+   and paste your own here. Ratio is clamped so a bad reference can't fling
+   the earring off the ear. */
+const REFERENCE_INTEROCULAR = 0.075;
+const WIDTH_SCALE_MIN = 0.8;
+const WIDTH_SCALE_MAX = 1.25;
 
 const _poseM = new THREE.Matrix4();
 const _earCam = new THREE.Vector3();
@@ -133,12 +157,7 @@ function normalizeModelToUnit(root) {
   root.position.z -= center.z;
 }
 
-/**
- * Split a single mesh's geometry at world x = 0, keeping triangles on the
- * requested side. Returns the new geometry, "empty" if nothing survives,
- * or null when this mesh can't be split safely (multi-material groups,
- * interleaved attributes, or everything already on one side).
- */
+
 function splitGeometryByWorldX(mesh, side, gapMin) {
   if (Array.isArray(mesh.material)) return null;
   let geom = mesh.geometry;
@@ -164,8 +183,7 @@ function splitGeometryByWorldX(mesh, side, gapMin) {
   }
   if (kept.length === 0) return "empty";
   if (kept.length === triCount) return null;
-  // Safety: a true pair has an empty GAP at the split plane. Geometry
-  // crossing the plane means this is one object — refuse to cut it in half.
+  // Safety: a true pair has an empty GAP at the split plane. 
   if (nearestToPlane < gapMin) return null;
   const out = new THREE.BufferGeometry();
   for (const name of Object.keys(geom.attributes)) {
@@ -182,13 +200,6 @@ function splitGeometryByWorldX(mesh, side, gapMin) {
   return out;
 }
 
-/**
- * Some GLBs contain BOTH earrings side by side. Split such a model at x = 0
- * and return only the requested half (side: -1 = left half, +1 = right half).
- * Multi-mesh pairs split by whole meshes; single-mesh pairs (both earrings
- * in one geometry) split at the triangle level. Returns null when the model
- * cannot be split — caller falls back to clone + mirror.
- */
 function extractHalf(root, side) {
   const clone = root.clone(true);
   clone.updateMatrixWorld(true);
@@ -226,11 +237,7 @@ function extractHalf(root, side) {
   return splitAny ? clone : null;
 }
 
-/**
- * Scale BOTH halves by one shared factor — normalizing each half
- * independently gives the left and right earring different sizes when
- * their bounds differ. Then pivot each at its own top edge.
- */
+
 function normalizeHalvesJointly(a, b) {
   const maxDimOf = (obj) => {
     const s = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
@@ -249,6 +256,24 @@ function normalizeHalvesJointly(a, b) {
   b.scale.multiplyScalar(1 / maxDim);
   pivotTop(a);
   pivotTop(b);
+}
+
+/* Soft radial-gradient dot for the fake contact shadow (shared texture). */
+let _shadowTex = null;
+function contactShadowTexture() {
+  if (_shadowTex) return _shadowTex;
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const ctx = c.getContext("2d");
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(0,0,0,0.55)");
+  g.addColorStop(0.5, "rgba(0,0,0,0.22)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  _shadowTex = new THREE.CanvasTexture(c);
+  _shadowTex.colorSpace = THREE.SRGBColorSpace;
+  return _shadowTex;
 }
 
 function applyRealisticMaterials(root, modelPath) {
@@ -319,12 +344,18 @@ export class EarringsSystem {
     this.right.renderOrder = 1;
     this.group.add(this.left, this.right);
     this._modelRoot = null;
-    // One Euro filters on the final transform — steady when the head is
-    // still, responsive during fast motion (applied after the rigid-body
-    // anchor, per the tracking fix plan).
-    this._leftPos = new OneEuroVec3({ minCutoff: 1.2, beta: 0.006 });
-    this._rightPos = new OneEuroVec3({ minCutoff: 1.2, beta: 0.006 });
-    this._rot = new OneEuroQuat({ minCutoff: 1.0, beta: 0.5 });
+   
+    this._leftPos = new OneEuroVec3({ minCutoff: EARRING_MIN_CUTOFF, beta: EARRING_BETA });
+    this._rightPos = new OneEuroVec3({ minCutoff: EARRING_MIN_CUTOFF, beta: EARRING_BETA });
+    this._leftRot = new OneEuroQuat({ minCutoff: EARRING_MIN_CUTOFF, beta: EARRING_BETA });
+    this._rightRot = new OneEuroQuat({ minCutoff: EARRING_MIN_CUTOFF, beta: EARRING_BETA });
+    this._presence = 1;   // 0–1 global fade for tracking loss (#4)
+    this._loggedInteroc = false;
+    this._shadowScale = 0.35; // contact-shadow size relative to earring scale
+    this._type = "dangle";    // 'dangle' | 'hoop' | 'stud' — only dangle gets physics
+    this._fixedNodes = null;  // GLB node names that stay rigid (hook/clasp)
+    this._leftShadow = null;
+    this._rightShadow = null;
     this._anchor = EAR_ANCHOR;
     this._dangle = { ...DANGLE_DEFAULTS };
     this._fitScale = 1;
@@ -360,13 +391,12 @@ export class EarringsSystem {
     this.group.visible = v;
   }
 
-  /** Live anchor object for the loaded product — used by the temporary
-      calibration overlay in ARView. */
+  /** Live anchor object for the loaded product */
   getAnchor() {
     return this._anchor;
   }
 
-  async loadModel(modelPath, { singleEarring = false, preserveMaterials = false, anchor = null, dangle = null, fit = null, materials = null, skinPenetration = 0 }: {
+  async loadModel(modelPath, { singleEarring = false, preserveMaterials = false, anchor = null, dangle = null, fit = null, materials = null, skinPenetration = 0, contactShadow = null, type = "dangle", fixedNodes = null }: {
     singleEarring?: boolean;
     preserveMaterials?: boolean;
     anchor?: { userRight: { lateral: number; down: number; back: number }; userLeft: { lateral: number; down: number; back: number } } | null;
@@ -374,10 +404,12 @@ export class EarringsSystem {
     fit?: { rotationDeg?: [number, number, number]; scale?: number } | null;
     materials?: Array<{ match: string; hide?: boolean; color?: string; metalness?: number; roughness?: number; clearcoat?: number; clearcoatRoughness?: number; envMapIntensity?: number }> | null;
     skinPenetration?: number;
+    contactShadow?: number;
+    type?: "dangle" | "hoop" | "stud";
+    fixedNodes?: string[] | null;
   } = {}) {
     this.clear();
-    // Clone (never alias) so live calibration edits stay with this session's
-    // product and can't leak into the shared defaults or other earrings.
+   
     const src = anchor ?? EAR_ANCHOR;
     this._anchor = {
       userRight: { ...src.userRight },
@@ -387,6 +419,9 @@ export class EarringsSystem {
     this._fitScale = fit?.scale ?? 1;
     this._matOverrides = materials ?? null;
     this._skin = skinPenetration; // cm pushed into the head so the attachment hides in the skin
+    if (contactShadow != null) this._shadowScale = contactShadow;
+    this._type = type;
+    this._fixedNodes = fixedNodes;
     this.onStatus("Loading earring model…");
     try {
       const gltf = await this.loader.loadAsync(modelPath);
@@ -398,10 +433,7 @@ export class EarringsSystem {
         }
       });
       this._modelRoot = root;
-      // Per-model orientation from config, applied BEFORE normalization so
-      // the pivot lands at the top of the model AS DISPLAYED. Models without
-      // it keep the legacy path (normalize, then blanket +90° X below) —
-      // Astraea is calibrated against that path; do not change it.
+      
       const rotDeg = fit?.rotationDeg ?? null;
       if (rotDeg) {
         root.rotation.set(
@@ -413,12 +445,7 @@ export class EarringsSystem {
       }
       normalizeModelToUnit(root);
       if (preserveMaterials) {
-        // Render the GLB's authored materials EXACTLY (colors, textures,
-        // normal + metal/rough maps) — only force double-sided for the
-        // mirrored clone. A textured PBR material is already art-directed;
-        // reflection-boosting it washes the normal detail into flat chrome.
-        // Only lift envMapIntensity on FLAT, untextured materials, which
-        // otherwise read dead-gray with no maps to shade them.
+        
         root.traverse((o) => {
           if (!o.isMesh) return;
           const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -436,9 +463,7 @@ export class EarringsSystem {
         applyRealisticMaterials(root, modelPath);
       }
 
-      // singleEarring GLB → clone + mirror it onto both ears.
-      // Dual-earring GLB → split at x=0 so each ear gets ONE earring
-      // (cloning the whole file would put a pair on each ear).
+      
       let leftModel = null;
       let rightModel = null;
       if (!singleEarring) {
@@ -472,22 +497,10 @@ export class EarringsSystem {
     }
   }
 
-  /**
-   * Wrap each side in a swing-pivot group (dangle physics rotates the
-   * group, the container keeps the rigid world-hang rotation) and give
-   * each side its own material instances so the far-side fade can change
-   * opacity independently (clones otherwise share materials).
-   */
+  
   _mountModels(leftModel, rightModel) {
     const mount = (container, model, matsOut) => {
-      const swing = new THREE.Group();
-      const box = new THREE.Box3().setFromObject(model);
-      const height = Math.max(1e-6, box.max.y - box.min.y);
-      const drop = (this._dangle.pivotDrop ?? 0) * height;
-      swing.position.y = -drop;
-      model.position.y += drop;
-      swing.add(model);
-      container.add(swing);
+      
       model.traverse((o) => {
         if (!o.isMesh) return;
         const cloneMat = (m) => {
@@ -501,6 +514,46 @@ export class EarringsSystem {
         };
         o.material = Array.isArray(o.material) ? o.material.map(cloneMat) : cloneMat(o.material);
       });
+
+     
+      if (this._type === "dangle" && this._fixedNodes && this._fixedNodes.length) {
+        const fixedNames = new Set(this._fixedNodes);
+        const fixedObjs = [];
+        model.traverse((o) => { if (o.name && fixedNames.has(o.name)) fixedObjs.push(o); });
+
+        // Pivot = bottom of the hook parts (= where the drop attaches).
+        let pivotY = 0;
+        if (fixedObjs.length) {
+          const hookBox = new THREE.Box3();
+          for (const o of fixedObjs) hookBox.expandByObject(o);
+          if (isFinite(hookBox.min.y)) pivotY = hookBox.min.y;
+        } else {
+          console.warn("[AR] fixedNodes not found in GLB:", this._fixedNodes);
+        }
+
+        const swing = new THREE.Group();
+        swing.position.y = pivotY;      // pivot at hook bottom
+        model.position.y -= pivotY;      // keep content world-fixed
+        swing.add(model);
+        container.add(swing);
+
+        // Move hook subtrees into a rigid group, preserving world transform.
+        const fixedGroup = new THREE.Group();
+        container.add(fixedGroup);
+        container.updateMatrixWorld(true);
+        for (const o of fixedObjs) fixedGroup.attach(o);
+        return swing;
+      }
+
+      // Fallback: whole model swings around a pivotDrop fraction from the top.
+      const swing = new THREE.Group();
+      const box = new THREE.Box3().setFromObject(model);
+      const height = Math.max(1e-6, box.max.y - box.min.y);
+      const drop = (this._dangle.pivotDrop ?? 0) * height;
+      swing.position.y = -drop;
+      model.position.y += drop;
+      swing.add(model);
+      container.add(swing);
       return swing;
     };
     this._leftMats = [];
@@ -508,10 +561,34 @@ export class EarringsSystem {
     this._leftSwingGroup = mount(this.left, leftModel, this._leftMats);
     this._rightSwingGroup = mount(this.right, rightModel, this._rightMats);
 
-    // Sanity check: if the mounted geometry ends up far from the container
-    // origin, the model's internal offset + legacy rotate-after-normalize
-    // order has slung it off the anchor (invisible on screen). The fix is
-    // per-model config, so warn loudly instead of failing silently.
+    // TEMP: bright-green wireframe sphere at each swing pivot (child of the
+    // swing group, so it sits AT the pivot and moves with it).
+    if (DANGLE_DEBUG_PIVOT) {
+      const marker = () => {
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(0.09, 10, 8),
+          new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, depthTest: false })
+        );
+        m.renderOrder = 999;
+        return m;
+      };
+      this._leftSwingGroup?.add(marker());
+      this._rightSwingGroup?.add(marker());
+
+      // Full hierarchy of the LEFT side so we can see fixed vs swing wiring.
+      const lines = [];
+      const walk = (o, d) => {
+        const kids = o.children.length;
+        lines.push(`${"  ".repeat(d)}${o.type} "${o.name || "(unnamed)"}"${o.isMesh ? " [mesh]" : ""} children=${kids}`);
+        for (const c of o.children) walk(c, d + 1);
+      };
+      walk(this.left, 0);
+      console.log("[dangle] LEFT scene graph after mount:\n" + lines.join("\n"));
+      console.log("[dangle] leftSwingGroup children:", this._leftSwingGroup?.children.length,
+        "| type:", this._type, "| fixedNodes:", this._fixedNodes);
+    }
+
+    
     const box = new THREE.Box3().setFromObject(this.left);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -524,11 +601,29 @@ export class EarringsSystem {
         ") — set arFit.rotationDeg on this product so the pivot is computed after rotation."
       );
     }
+
+   
+    const makeShadow = () => {
+      const mat = new THREE.SpriteMaterial({
+        map: contactShadowTexture(),
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.3,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.setScalar(this._shadowScale);
+      sprite.renderOrder = 0.5;
+      return sprite;
+    };
+    this._leftShadow = makeShadow();
+    this._rightShadow = makeShadow();
+    this.left.add(this._leftShadow);
+    this.right.add(this._rightShadow);
   }
 
-  /** Apply a per-model material override (matched by material name) from
-      the product's arMaterials config. Upgrades to MeshPhysicalMaterial
-      when clearcoat is requested. */
+
   _applyMaterialOverride(mat) {
     if (!this._matOverrides) return mat;
     const name = (mat.name || "").toLowerCase();
@@ -555,6 +650,33 @@ export class EarringsSystem {
     if (ov.envMapIntensity !== undefined && "envMapIntensity" in target) target.envMapIntensity = ov.envMapIntensity;
     target.needsUpdate = true;
     return target;
+  }
+
+  /** Combined opacity = yaw fade × tracking presence. Also toggles per-side
+      visibility so fully-faded earrings skip rendering. */
+  _applyOpacity() {
+    const lo = this._leftFade * this._presence;
+    const ro = this._rightFade * this._presence;
+    this._setSideOpacity(this._leftMats, lo);
+    this._setSideOpacity(this._rightMats, ro);
+    this.left.visible = lo > 0.02;
+    this.right.visible = ro > 0.02;
+  }
+
+ 
+  applyPresence(tracked, dtSeconds, lostMs) {
+    const dt = THREE.MathUtils.clamp(dtSeconds, 0, 0.05);
+    if (!tracked && lostMs > 2000) {
+      this._presence = 0;
+    } else {
+      const dur = tracked ? 0.3 : 0.2; // fade-in slower than fade-out
+      const step = dt / dur;
+      const target = tracked ? 1 : 0;
+      this._presence = this._presence < target
+        ? Math.min(target, this._presence + step)
+        : Math.max(target, this._presence - step);
+    }
+    this._applyOpacity();
   }
 
   _setSideOpacity(mats, opacity) {
@@ -608,9 +730,14 @@ export class EarringsSystem {
         disposeObject3D(child);
       }
     }
+    this._leftShadow?.material?.dispose();
+    this._rightShadow?.material?.dispose();
+    this._leftShadow = null;
+    this._rightShadow = null;
     this._leftPos.reset();
     this._rightPos.reset();
-    this._rot.reset();
+    this._leftRot.reset();
+    this._rightRot.reset();
     this._leftSwingGroup = null;
     this._rightSwingGroup = null;
     this._leftMats = [];
@@ -633,7 +760,9 @@ export class EarringsSystem {
       pitch: 0.25,
       roll: 0.85,
     });
-    const rot = this._rot.filter(dampedPose, dtSeconds);
+    // Per-side One Euro on rotation (separate state, same head input).
+    const rotL = this._leftRot.filter(dampedPose, dtSeconds);
+    const rotR = this._rightRot.filter(dampedPose, dtSeconds);
     // Far-side fade from the matrix-derived yaw — smooth opacity ramp
     // between FADE_START_DEG and FADE_END_DEG instead of a hard toggle.
     // RAW yaw straight from the transform matrix — no smoothing, so the fade
@@ -648,9 +777,7 @@ export class EarringsSystem {
     } else {
       yawDeg = THREE.MathUtils.radToDeg(headPose?.yaw ?? 0);
     }
-    // Direct linear map yaw → opacity (no lerp): 1.0 at fadeStartDeg, 0.0 at
-    // fadeEndDeg. Instant, no asymptotic crawl. Mirrored: right ear fades on
-    // positive yaw, left on negative.
+    
     const fadeFor = (deg) =>
       THREE.MathUtils.clamp((fadeEndDeg - deg) / (fadeEndDeg - fadeStartDeg), 0, 1);
     let leftFadeTarget = fadeFor(-yawDeg);
@@ -696,23 +823,14 @@ export class EarringsSystem {
         }
       }
     }
-    // Apply opacity directly from the yaw map — no per-frame easing, no lag.
-    // The 8° linear ramp itself softens the edge, so this reads as a quick
-    // fade rather than a hard pop.
+    
     this._leftFade = leftFadeTarget;
     this._rightFade = rightFadeTarget;
-    this._setSideOpacity(this._leftMats, this._leftFade);
-    this._setSideOpacity(this._rightMats, this._rightFade);
-    this.left.visible = this._leftFade > 0.02;
-    this.right.visible = this._rightFade > 0.02;
+    this._applyOpacity();
     const localX = new THREE.Vector3(1, 0, 0).applyQuaternion(poseQuat);
     const localY = new THREE.Vector3(0, 1, 0).applyQuaternion(poseQuat);
     const localZ = new THREE.Vector3(0, 0, 1).applyQuaternion(poseQuat);
-    // Rigid-body anchor, done properly:
-    //   worldPos(cam space, cm) = facialTransformMatrix × localOffset (w = 1)
-    // then perspective-projected with the camera MediaPipe assumes
-    // (63° vertical FOV, face at negative Z), then mapped into the stage.
-    // Position and rotation both derive from the SAME matrix, every frame.
+   
     let leftTarget, rightTarget;
     let interocularPx = 0;
     if (landmarks && landmarks.length >= 468 && poseMatrix && poseMatrix.length === 16) {
@@ -733,28 +851,22 @@ export class EarringsSystem {
       const fx = fy / aspect;
 
       const projectEar = (localX_, localY_, localZ_) => {
-        // Local offset multiplied THROUGH the matrix, homogeneous w = 1
         _earCam.set(localX_, localY_, localZ_).applyMatrix4(_poseM);
-        // Degenerate frame (point at/behind the camera) — refuse rather
-        // than project the earring into the void.
-        if (_earCam.z > -1) return null;
+        if (_earCam.z > -1) return null; // point at/behind camera
         const xNdc = (_earCam.x / -_earCam.z) * fx;
         const yNdc = (_earCam.y / -_earCam.z) * fy;
         const u = (1 + xNdc) / 2;
         const v = (1 - yNdc) / 2;
-        // Stage z: canonical depth relative to the face origin, in px,
-        // around the eye-plane reference (drives occluder + scale only).
         const zPx = zRef + (_earCam.z - faceOriginCamZ) * pxPerCm;
         return normToStageVec3({ x: u, y: v }, view, zPx);
       };
 
-      // Canonical face: +X = wearer's LEFT, +Y = up, +Z = toward the camera.
-      // Per-model anchor if the product config provides one, else the default.
+      // Interocular width-scaling disabled — it jittered with expression.
+      // Canonical face: +X = wearer's left, +Y = up, +Z = toward camera.
       const oR = this._anchor.userRight;
       const oL = this._anchor.userLeft;
-      // Wearer's RIGHT ear (canonical -X) lands on image-left = stage-left group.
-      // skinPenetration adds to the back offset so the attachment point pushes
-      // into the lobe (post/hook hidden) rather than floating in front of it.
+      // Wearer's right ear (canonical -X) → stage-left group. skin pushes the
+      // attachment into the lobe.
       const skin = this._skin;
       leftTarget  = projectEar(-oR.lateral, -oR.down, -(oR.back + skin));
       rightTarget = projectEar(+oL.lateral, -oL.down, -(oL.back + skin));
@@ -775,44 +887,43 @@ export class EarringsSystem {
       .addScaledVector(localX, s.offsetX)
       .addScaledVector(localY, s.offsetY)
       .addScaledVector(localZ, s.offsetZ);
-    // One Euro smoothing on the final positions (after correctness, not before)
     const leftPos = this._leftPos.filter(leftTarget, dtSeconds);
     const rightPos = this._rightPos.filter(rightTarget, dtSeconds);
     this.left.position.copy(leftPos);
     this.right.position.copy(rightPos);
+    if (this._type !== "dangle") {
+      // Hoops & studs: rigid, full yaw-follow, no physics.
+      const eL = new THREE.Euler().setFromQuaternion(rotL, "YXZ");
+      const eR = new THREE.Euler().setFromQuaternion(rotR, "YXZ");
+      this.left.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), eL.y);
+      this.right.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), eR.y);
+    } else {
     const dt = Math.min(0.03, Math.max(0.001, dtSeconds));
-    if (this._prevLeftTarget.lengthSq() < 1e-6) this._prevLeftTarget.copy(leftPos);
-    if (this._prevRightTarget.lengthSq() < 1e-6) this._prevRightTarget.copy(rightPos);
-    const leftVelX = (leftPos.x - this._prevLeftTarget.x) / dt;
-    const leftVelY = (leftPos.y - this._prevLeftTarget.y) / dt;
-    this._prevLeftTarget.copy(leftPos);
+   
+    if (this._prevLeftTarget.lengthSq() < 1e-6) this._prevLeftTarget.copy(leftTarget);
+    if (this._prevRightTarget.lengthSq() < 1e-6) this._prevRightTarget.copy(rightTarget);
+    const leftVelX = (leftTarget.x - this._prevLeftTarget.x) / dt;
+    const leftVelY = (leftTarget.y - this._prevLeftTarget.y) / dt;
+    this._prevLeftTarget.copy(leftTarget);
     let leftAccelX = (leftVelX - this._prevLeftVelX) / dt;
     let leftAccelY = (leftVelY - this._prevLeftVelY) / dt;
     if (Math.hypot(leftVelX, leftVelY) > TELEPORT_SPEED) {
-      // Teleport (tab-switch / tracking gap): no kick, and don't poison the
-      // next frame's acceleration with the bogus velocity either.
-      leftAccelX = 0;
-      leftAccelY = 0;
-      this._prevLeftVelX = 0;
-      this._prevLeftVelY = 0;
+      leftAccelX = 0; leftAccelY = 0; this._prevLeftVelX = 0; this._prevLeftVelY = 0;
     } else {
-      this._prevLeftVelX = leftVelX;
-      this._prevLeftVelY = leftVelY;
+      this._prevLeftVelX = leftVelX; this._prevLeftVelY = leftVelY;
     }
-    const rightVelX = (rightPos.x - this._prevRightTarget.x) / dt;
-    const rightVelY = (rightPos.y - this._prevRightTarget.y) / dt;
-    this._prevRightTarget.copy(rightPos);
+    const rightVelX = (rightTarget.x - this._prevRightTarget.x) / dt;
+    const rightVelY = (rightTarget.y - this._prevRightTarget.y) / dt;
+    this._prevRightTarget.copy(rightTarget);
     let rightAccelX = (rightVelX - this._prevRightVelX) / dt;
     let rightAccelY = (rightVelY - this._prevRightVelY) / dt;
     if (Math.hypot(rightVelX, rightVelY) > TELEPORT_SPEED) {
-      rightAccelX = 0;
-      rightAccelY = 0;
-      this._prevRightVelX = 0;
-      this._prevRightVelY = 0;
+      rightAccelX = 0; rightAccelY = 0; this._prevRightVelX = 0; this._prevRightVelY = 0;
     } else {
-      this._prevRightVelX = rightVelX;
-      this._prevRightVelY = rightVelY;
+      this._prevRightVelX = rightVelX; this._prevRightVelY = rightVelY;
     }
+    if (DANGLE_DEBUG_ACCEL && (this._dbgFrame = (this._dbgFrame | 0) + 1) % 60 === 0)
+      console.log(`[dangle] |accel|=${Math.hypot(leftAccelX, leftAccelY).toFixed(0)} swingX=${(this._leftSwingX * 57.3).toFixed(1)}°`);
     // Spring-damper pendulum — tunables come from the earring's config
     const K = this._dangle.stiffness;
     const C = this._dangle.damping;
@@ -850,20 +961,26 @@ export class EarringsSystem {
     // never tilts the earring. yawFollow scales how much of the head's turn
     // the earring shares: danglers swivel freely on their wire and stay
     // mostly front-facing (low yawFollow) instead of exposing their backs.
-    const headEuler = new THREE.Euler().setFromQuaternion(rot, "YXZ");
-    const baseRot = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0), headEuler.y * this._dangle.yawFollow
-    );
-    this.left.quaternion.copy(baseRot);
-    this.right.quaternion.copy(baseRot);
-    if (this._leftSwingGroup) this._leftSwingGroup.rotation.set(this._leftSwingY, 0, this._leftSwingX, "YXZ");
-    if (this._rightSwingGroup) this._rightSwingGroup.rotation.set(this._rightSwingY, 0, this._rightSwingX, "YXZ");
-    // ONE shared depth factor — per-side factors rendered left and right at
-    // visibly different sizes (the calibrated anchors sit at different depths).
+    const yawFollow = this._dangle.yawFollow;
+    const eulerL = new THREE.Euler().setFromQuaternion(rotL, "YXZ");
+    const eulerR = new THREE.Euler().setFromQuaternion(rotR, "YXZ");
+    this.left.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), eulerL.y * yawFollow);
+    this.right.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), eulerR.y * yawFollow);
+      // TEMP: force a visible 20° oscillation to prove the swing plumbing,
+      // bypassing head-motion input entirely.
+      if (DANGLE_FORCE_OSCILLATION) {
+        const f = Math.sin(Date.now() * 0.005) * THREE.MathUtils.degToRad(20);
+        this._leftSwingX = f; this._leftSwingY = 0;
+        this._rightSwingX = f; this._rightSwingY = 0;
+      }
+      // Swing ONLY the swing group (the drop) — the container holds the hook
+      // rigidly, so the hook stays locked to the ear and the gems swing below.
+      if (this._leftSwingGroup) this._leftSwingGroup.rotation.set(this._leftSwingY, 0, this._leftSwingX, "YXZ");
+      if (this._rightSwingGroup) this._rightSwingGroup.rotation.set(this._rightSwingY, 0, this._rightSwingX, "YXZ");
+    }
+    
     const depthFactor = 1.0 + ((leftPos.z + rightPos.z) * 0.5) / 1000;
-    // Size from the stable interocular distance (≈ cheek width × 1/1.5),
-    // not from the jittery silhouette-landmark width. _fitScale is the
-    // per-model size multiplier from the product's arFit config.
+    
     const widthRef = interocularPx > 0 ? interocularPx * 1.5 : faceWidthPx;
     const baseScale = Math.max(28, widthRef * 0.32) * Math.max(0.1, s.scaleMultiplier) * this._fitScale;
     this.left.scale.setScalar(baseScale * depthFactor);

@@ -19,10 +19,7 @@ interface ARViewProps {
   onOpenOrderModal: (customizations: any) => void;
 }
 
-/* Fixed fit applied to every earring. Screen-space offsets are ZERO on
-   purpose: placement is now fully owned by the matrix-transformed
-   EAR_ANCHOR (canonical cm) in lib/ar/earrings.ts — post-hoc screen
-   nudges would break again under rotation. */
+
 const EARRING_FIT = {
   offsetX: 0,
   offsetY: 0,
@@ -133,6 +130,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     const resizeRenderer = () => {
       if (!renderer || !camera || !containerRef.current) return;
       updateView();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(view.stageW, view.stageH);
       const hw = view.stageW / 2, hh = view.stageH / 2;
       camera.left = -hw; camera.right = hw; camera.top = hh; camera.bottom = -hh;
@@ -142,7 +140,25 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     const initAR = async () => {
       try {
         setLoadingMsg('Initializing webcam...');
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setLoadingMsg('Camera not supported in this browser. Try Safari (iOS) or Chrome (Android).');
+          return;
+        }
+        
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+        } catch (camErr: any) {
+          const name = camErr?.name;
+          if (name === 'NotAllowedError' || name === 'SecurityError') {
+            setLoadingMsg('Camera permission denied. Enable camera access in your browser settings, then reload.');
+          } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+            setLoadingMsg('No camera found on this device.');
+          } else {
+            setLoadingMsg('Could not start the camera. Check that no other app is using it, then reload.');
+          }
+          return;
+        }
         if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
         if (videoRef.current) {
@@ -156,6 +172,8 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         const canvas = canvasRef.current;
         if (!canvas) throw new Error('Canvas not found');
         renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+        // Cap DPR at 2 — 3x phone displays would otherwise render 9× the pixels.
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.setClearColor(0x000000, 0);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         //  Neutral keeps the gold gold.
@@ -164,8 +182,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         scene = new THREE.Scene();
         const pmrem = new THREE.PMREMGenerator(renderer);
         scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-        // Neutral-ish env level so authored materials render close to how
-        // they look in a Blender studio viewport (not blown out).
+        
         scene.environmentIntensity = 1.15;
 
         const ambient = new THREE.AmbientLight(0xffffff, 0.25); scene.add(ambient); ambientRef.current = ambient;
@@ -177,6 +194,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         camera.position.set(0, 0, 1000); camera.lookAt(0, 0, 0);
         resizeRenderer();
         window.addEventListener('resize', resizeRenderer);
+        window.addEventListener('orientationchange', resizeRenderer);
 
         setLoadingMsg('Loading Face AI Models...');
         const tracker = new FaceTracker();
@@ -185,7 +203,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         if (!active) { tracker.dispose(); return; }
         trackerRef.current = tracker;
 
-        occluderRef.current = new FaceOccluder({ scene });
+        
         const gltfLoader = new GLTFLoader();
         earringsRef.current  = new EarringsSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
         necklacesRef.current = new NecklaceSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
@@ -193,14 +211,23 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         setLoadingMsg('Loading 3D Product...');
         earringsRef.current.setVisible(product.category === 'earrings');
         necklacesRef.current.setVisible(product.category === 'necklaces');
-        if (product.category === 'earrings') await earringsRef.current.loadModel(product.modelPath, { singleEarring: product.pair === true, preserveMaterials: product.preserveMaterials === true, anchor: product.earAnchor, dangle: product.dangle, fit: product.arFit, materials: product.arMaterials, skinPenetration: product.skinPenetration });
+        if (product.category === 'earrings') await earringsRef.current.loadModel(product.modelPath, { singleEarring: product.pair === true, preserveMaterials: product.preserveMaterials === true, anchor: product.earAnchor, dangle: product.dangle, fit: product.arFit, materials: product.arMaterials, skinPenetration: product.skinPenetration, contactShadow: product.contactShadow, type: product.arType, fixedNodes: product.fixedNodes });
         else await necklacesRef.current.loadModel(product.modelPath);
         setLoadingMsg('');
 
-        let lastNow = performance.now(), lastVideoTime = -1, lastDetectionMs = 0, lastDet: any = null, frameCount = 0;
+        let lastNow = performance.now(), lastVideoTime = -1, lastDetectionMs = 0, lastDet: any = null, frameCount = 0, trackingLostMs = 0;
         const leftEarAnchor = EarAnchor.defaultLeft(), rightEarAnchor = EarAnchor.defaultRight();
-        const offscreenCanvas = document.createElement('canvas'); offscreenCanvas.width = 16; offscreenCanvas.height = 16;
+        // One small offscreen canvas (64×64) for ALL scene-lighting sampling —
+        // never the full camera frame. Throttled harder on mobile.
+        const offscreenCanvas = document.createElement('canvas'); offscreenCanvas.width = 64; offscreenCanvas.height = 64;
         const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+        const SAMPLE_EVERY = isMobile ? 6 : 3; // frames between lighting samples
+        const BASE_ENV = 1.15;    // matches scene.environmentIntensity at init
+        const REF_SKIN_LUM = 0.6; // skin luminance considered "well lit"
+        let lightBiasSmooth = 0;  // -1..1, ~30-frame running avg (light direction)
+        let warmthSmooth = 1.35;  // R/B ratio, ~90-frame avg (colour temperature)
+        let envMulSmooth = 1;     // env-intensity multiplier, ~90-frame avg
 
         const loop = (now: number) => {
           if (!active) return;
@@ -209,16 +236,63 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           const video = videoRef.current;
           if (video && video.readyState >= 2 && video.videoWidth > 0 && tracker.ready) {
             frameCount++;
-            if (frameCount % 12 === 0 && offscreenCtx) {
+            if (frameCount % SAMPLE_EVERY === 0 && offscreenCtx) {
               try {
-                offscreenCtx.drawImage(video, 0, 0, 16, 16);
-                const imgData = offscreenCtx.getImageData(0, 0, 16, 16).data;
+                offscreenCtx.drawImage(video, 0, 0, 64, 64);
+                const data = offscreenCtx.getImageData(0, 0, 64, 64).data;
+
+                // Overall luminance → existing light-intensity adaptation
                 let sumL = 0;
-                for (let i = 0; i < imgData.length; i += 4) sumL += (0.2126 * imgData[i] + 0.7152 * imgData[i+1] + 0.0722 * imgData[i+2]) / 255;
-                const avg = sumL / 256;
+                for (let i = 0; i < data.length; i += 4) sumL += (0.2126 * data[i] + 0.7152 * data[i+1] + 0.0722 * data[i+2]) / 255;
+                const avg = sumL / (64 * 64);
                 if (ambientRef.current) ambientRef.current.intensity = THREE.MathUtils.lerp(ambientRef.current.intensity, THREE.MathUtils.lerp(0.12, 0.50, avg), 0.08);
                 if (keyRef.current)     keyRef.current.intensity     = THREE.MathUtils.lerp(keyRef.current.intensity,     THREE.MathUtils.lerp(0.70, 2.00, avg), 0.08);
                 if (fillRef.current)    fillRef.current.intensity    = THREE.MathUtils.lerp(fillRef.current.intensity,    THREE.MathUtils.lerp(0.30, 1.10, avg), 0.08);
+
+                // Face-relative sampling (uses last frame's landmarks — 1 frame old is fine)
+                const lm = lastDet?.landmarks;
+                if (lm && lm.length >= 468) {
+                  const rgbAt = (idx: number) => {
+                    const p = lm[idx];
+                    if (!p) return null;
+                    const x = Math.min(63, Math.max(0, Math.round(p.x * 64)));
+                    const y = Math.min(63, Math.max(0, Math.round(p.y * 64)));
+                    const o = (y * 64 + x) * 4;
+                    return [data[o], data[o + 1], data[o + 2]] as const;
+                  };
+
+                  // (#1) Light direction from left/right cheek brightness
+                  const lc = rgbAt(234), rc = rgbAt(454);
+                  if (lc && rc) {
+                    const lb = 0.2126 * lc[0] + 0.7152 * lc[1] + 0.0722 * lc[2];
+                    const rb = 0.2126 * rc[0] + 0.7152 * rc[1] + 0.0722 * rc[2];
+                    const bias = (rb - lb) / (rb + lb + 1e-3);       // >0 = right side brighter
+                    lightBiasSmooth += (bias - lightBiasSmooth) / 30; // ~30-frame running avg
+                    if (keyRef.current) keyRef.current.position.x = 200 + lightBiasSmooth * 350; // subtle
+                  }
+
+                  // (#3/#4) Skin tone → colour temperature + scene brightness
+                  const skin = [rgbAt(10), rgbAt(234), rgbAt(454), rgbAt(152)].filter(Boolean) as (readonly number[])[];
+                  if (skin.length) {
+                    let r = 0, g = 0, b = 0;
+                    for (const c of skin) { r += c[0]; g += c[1]; b += c[2]; }
+                    r /= skin.length; g /= skin.length; b /= skin.length;
+
+                    // (#3) warmth: R/B ratio, heavily smoothed (~90 frames)
+                    warmthSmooth += (r / (b + 1e-3) - warmthSmooth) / 90;
+                    const warmT = THREE.MathUtils.clamp((warmthSmooth - 1.1) / 0.6, 0, 1);
+                    if (ambientRef.current) ambientRef.current.color.setRGB(
+                      THREE.MathUtils.lerp(0.90, 1.00, warmT),   // cool → warm R
+                      THREE.MathUtils.lerp(0.94, 0.95, warmT),   // G ~flat
+                      THREE.MathUtils.lerp(1.00, 0.88, warmT)    // cool → warm B
+                    );
+
+                    // (#4) reflection intensity by scene brightness (~90 frames)
+                    const skinLum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+                    envMulSmooth += (THREE.MathUtils.clamp(skinLum / REF_SKIN_LUM, 0.15, 1.0) - envMulSmooth) / 90;
+                    if (scene) scene.environmentIntensity = BASE_ENV * envMulSmooth;
+                  }
+                }
               } catch {}
             }
             let det = lastDet;
@@ -228,6 +302,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               catch (e) { console.error(e); det = null; }
             }
             if (det) {
+              trackingLostMs = 0;
               // Face re-found: restore visibility (it's cleared on dropout below,
               // and must come back or the jewellery vanishes permanently).
               occluderRef.current?.setVisible(true);
@@ -244,10 +319,16 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               } else if (product.category === 'necklaces' && necklacesRef.current) {
                 necklacesRef.current.update({ anchors: { chin: det.chin, jawLeft: det.jawLeft, jawRight: det.jawRight, neck: det.neck }, view, jawWidthPx: faceWidthPx, poseQuat, dtSeconds });
               }
+              // Ramp presence up (fade back in) while tracked.
+              earringsRef.current?.applyPresence(true, dtSeconds, 0);
             } else {
-              occluderRef.current?.setVisible(false);
-              earringsRef.current?.setVisible(false);
+              // Lost face: DON'T touch transforms (freeze at last pose). Fade
+              // the earrings out smoothly instead of vanishing in one frame;
+              // hard-hide after 2s (handled inside applyPresence).
+              trackingLostMs += dtSeconds * 1000;
+              earringsRef.current?.applyPresence(false, dtSeconds, trackingLostMs);
               necklacesRef.current?.setVisible(false);
+              if (trackingLostMs > 2000) occluderRef.current?.setVisible(false);
             }
           }
           if (renderer && scene && camera) renderer.render(scene, camera);
@@ -263,6 +344,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     return () => {
       active = false;
       window.removeEventListener('resize', resizeRenderer);
+      window.removeEventListener('orientationchange', resizeRenderer);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       trackerRef.current?.dispose();
@@ -345,8 +427,10 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
         <button
           onClick={onClose}
-          className="absolute top-5 left-5 z-20 cursor-pointer flex items-center gap-2"
+          className="absolute z-20 cursor-pointer flex items-center gap-2"
           style={{
+            top: 'calc(20px + env(safe-area-inset-top))',
+            left: 'calc(20px + env(safe-area-inset-left))',
             background: 'rgba(10,10,10,0.7)',
             backdropFilter: 'blur(8px)',
             border: '1px solid rgba(255,255,255,0.15)',

@@ -54,12 +54,7 @@ function landmarkAt(landmarks, index) {
   return p;
 }
 
-/**
- * MediaPipe's WASM runtime routes its internal INFO log lines (e.g.
- * "INFO: Created TensorFlow Lite XNNPACK delegate for CPU.") through
- * console.error, which the Next.js dev overlay reports as a real error.
- * Downgrade only those lines to console.info; everything else passes through.
- */
+
 let consolePatched = false;
 function muteMediapipeInfoLogs() {
   if (consolePatched || typeof console === "undefined") return;
@@ -80,6 +75,54 @@ export class FaceTracker {
     this._ready = false;
     this._lastGoodMatrix = null;
     this._lastTs = 0;
+    // Multi-face primary selection + hysteresis
+    this._primaryCenter = null; // {x,y} bbox centre of the currently tracked face
+    this._primaryArea = 0;
+    this._lastSwitchMs = 0;     // when we last switched primary face
+    this._multiWarnMs = 0;      // throttle the multi-face warning
+  }
+
+  _faceMetrics(landmarks) {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of landmarks) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, area: (maxX - minX) * (maxY - minY) };
+  }
+
+  
+  _selectPrimary(faces, nowMs) {
+    let largest = faces[0];
+    for (const f of faces) if (f.area > largest.area) largest = f;
+
+    if (!this._primaryCenter) {
+      this._primaryCenter = { x: largest.cx, y: largest.cy };
+      this._primaryArea = largest.area;
+      this._lastSwitchMs = nowMs;
+      return largest.i;
+    }
+
+    let nearest = faces[0], nd = Infinity;
+    for (const f of faces) {
+      const d = (f.cx - this._primaryCenter.x) ** 2 + (f.cy - this._primaryCenter.y) ** 2;
+      if (d < nd) { nd = d; nearest = f; }
+    }
+
+    let chosen;
+    if (nearest === largest) {
+      chosen = largest; // face we're tracking is still the biggest
+    } else if (nowMs - this._lastSwitchMs > 500 && largest.area > nearest.area * 1.15) {
+      chosen = largest; // a different face has been clearly bigger long enough
+      this._lastSwitchMs = nowMs;
+    } else {
+      chosen = nearest; // stick with the tracked face (hysteresis)
+    }
+    this._primaryCenter = { x: chosen.cx, y: chosen.cy };
+    this._primaryArea = chosen.area;
+    return chosen.i;
   }
 
   get ready() {
@@ -97,7 +140,7 @@ export class FaceTracker {
           delegate: "GPU",
         },
         runningMode: "VIDEO",
-        numFaces: 1,
+        numFaces: 2, // detect up to 2 so we can pick the largest and ignore bystanders
         outputFaceBlendshapes: false,
         outputFacialTransformationMatrixes: true,
       });
@@ -108,7 +151,7 @@ export class FaceTracker {
           delegate: "CPU",
         },
         runningMode: "VIDEO",
-        numFaces: 1,
+        numFaces: 2,
         outputFaceBlendshapes: false,
         outputFacialTransformationMatrixes: true,
       });
@@ -134,8 +177,26 @@ export class FaceTracker {
       return null;
     }
 
-    const faceLandmarks = mpResult.faceLandmarks?.[0];
+    const allFaces = mpResult.faceLandmarks;
+    if (!allFaces || allFaces.length === 0) return null;
+
+    // Multi-face rejection: track only the primary (largest, with hysteresis).
+    let faceLandmarks, facialMatrix;
+    if (allFaces.length === 1) {
+      faceLandmarks = allFaces[0];
+      facialMatrix = mpResult.facialTransformationMatrixes?.[0]?.data ?? null;
+    } else {
+      if (ts - this._multiWarnMs > 2000) {
+        console.warn(`FaceTracker: ${allFaces.length} faces detected — tracking the largest, ignoring the rest.`);
+        this._multiWarnMs = ts;
+      }
+      const faces = allFaces.map((lm, i) => ({ i, ...this._faceMetrics(lm) }));
+      const primaryIdx = this._selectPrimary(faces, ts);
+      faceLandmarks = allFaces[primaryIdx];
+      facialMatrix = mpResult.facialTransformationMatrixes?.[primaryIdx]?.data ?? null;
+    }
     if (!faceLandmarks || faceLandmarks.length === 0) return null;
+
     const chin = findChin(faceLandmarks);
     const leftEarIdx = 172;
     const rightEarIdx = 397;
@@ -171,7 +232,6 @@ export class FaceTracker {
       y: clamp01(chin.y + 0.12),
       z: chin.z,
     };
-    const facialMatrix = mpResult.facialTransformationMatrixes?.[0]?.data ?? null;
     const resolvedMatrix = facialMatrix ?? this._lastGoodMatrix;
     if (facialMatrix) this._lastGoodMatrix = facialMatrix;
     return {

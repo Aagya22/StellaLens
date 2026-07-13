@@ -26,8 +26,16 @@ export interface Product {
     pivotDrop?: number;
     yawFollow?: number;
   };
-  
+
   skinPenetration?: number;
+  /** Contact-shadow size relative to earring scale (studs larger, danglers smaller). Default 0.35. */
+  contactShadow?: number;
+  /** Physics type: 'dangle' = hook/drop split + spring-damper swing;
+      'hoop'/'stud' = rigid, full yaw-follow, no physics. Default 'dangle'. */
+  arType?: 'dangle' | 'hoop' | 'stud';
+  /** For 'dangle' only: GLB node names that stay rigid to the ear (the hook/
+      clasp). Everything else swings. Omit to fall back to whole-model pivotDrop. */
+  fixedNodes?: string[];
   /** AR fit per model: orientation correction (degrees, applied before the
       pivot is computed) and a size multiplier on the shared base scale */
   arFit?: {
@@ -62,8 +70,10 @@ export const PRODUCTS: Product[] = [
     pair: true,
     preserveMaterials: true,
     // Hook levers slightly around the piercing at large swings
-    dangle: { pivotDrop: 0.2 },      // dangler → default yawFollow 0.2
-    skinPenetration: 0.5,            // hook tip into the lobe
+    arType: 'dangle',
+    fixedNodes: ['HOOK_3', 'CLASP_2'], // stay rigid to the ear; gems swing below
+    dangle: { pivotDrop: 0.2 },        // pivotDrop unused when fixedNodes present
+    skinPenetration: 0.5,              // hook tip into the lobe
     // Calibrated live 2026-07-12
     earAnchor: {
       userRight: { lateral: 7.8, down: 4.1, back: 4.2 },
@@ -83,6 +93,7 @@ export const PRODUCTS: Product[] = [
     pair: true,
     preserveMaterials: true,
     
+    arType: 'hoop',       // rigid loop, full yaw-follow, no swing physics
     arFit: { rotationDeg: [0, 0, 0], scale: 1.2 },
     skinPenetration: 0.5,
     // Calibrated live 2026-07-12
@@ -101,9 +112,9 @@ export const PRODUCTS: Product[] = [
     arEnabled: true,
     image: "/images/earrings1.png",
     preserveMaterials: true,
-    // Studs are rigid to the lobe: full yaw follow, no swing.
-    dangle: { yawFollow: 1.0, maxSwingDeg: 0 },
+    arType: 'stud',       // flat, rigid to the lobe, no physics at all
     skinPenetration: 1.5, // post fully hidden, gem sits flush on the lobe
+    contactShadow: 0.5,   // stud presses flat → wider contact shadow
     // Calibrated live 2026-07-12
     earAnchor: {
       userRight: { lateral: 8.6, down: 1.5, back: 3.5 },
@@ -128,6 +139,8 @@ export const PRODUCTS: Product[] = [
     pair: true,
     preserveMaterials: true,
    
+    arType: 'dangle',     // single mesh, no fixedNodes → whole-model pivotDrop swing
+    dangle: { pivotDrop: 0.25 },
     arFit: { rotationDeg: [90, 90, 0], scale: 1.4 },
     skinPenetration: 0.5 // dangler → default yawFollow 0.2, hook tip into lobe
   },

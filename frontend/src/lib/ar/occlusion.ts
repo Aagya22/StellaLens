@@ -11,6 +11,15 @@ const FACE_OVAL = [
 
 const MAX_VERTS = 478; // 468 mesh + 10 iris (blendshapes model)
 
+/* Ear / near-ear landmarks (jawline→temple, both sides). Triangles touching
+   any of these are dropped from the occluder so the earring renders freely
+   at the attachment point instead of z-fighting the face surface there. The
+   cheek, jaw, chin, neck, and central face stay covered. */
+const EAR_EXCLUDE = new Set([
+  234, 127, 132, 170, 177, 147, 187, // wearer's right side
+  454, 356, 361, 395, 401, 376, 411, // wearer's left side
+]);
+
 function normToStageXY(p, view) {
   const px = p.x * view.videoW;
   const py = p.y * view.videoH;
@@ -27,14 +36,7 @@ function zToPx(zNorm, view) {
   return -zNorm * S;
 }
 
-/**
- * Reconstruct the face-mesh triangle list from MediaPipe's tessellation,
- * which ships as an edge list (FACE_LANDMARKS_TESSELATION = [{start,end},…]).
- * A triangulated surface's faces are exactly its 3-cliques, so we find every
- * pair of connected vertices that share a common neighbour. Deduped by a
- * sorted key. Returns a flat index array, or null if the tessellation isn't
- * exposed by the current package build.
- */
+
 function buildTessellationTriangles() {
   const conns = FaceLandmarker?.FACE_LANDMARKS_TESSELATION;
   if (!conns || !conns.length) return null;
@@ -54,10 +56,12 @@ function buildTessellationTriangles() {
   const seen = new Set();
   for (const c of conns) {
     const a = c.start, b = c.end;
+    if (EAR_EXCLUDE.has(a) || EAR_EXCLUDE.has(b)) continue; // skip ear-zone triangles
     const na = adj.get(a), nb = adj.get(b);
     const [small, big] = na.size <= nb.size ? [na, nb] : [nb, na];
     for (const cc of small) {
       if (cc === a || cc === b) continue;
+      if (EAR_EXCLUDE.has(cc)) continue;
       if (!big.has(cc)) continue;
       const key =
         Math.min(a, b, cc) * 1_000_000 +
@@ -99,15 +103,15 @@ export class FaceOccluder {
       this.geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     }
 
-    // Depth-only: invisible to color, but writes depth so anything drawn
-    // AFTER it (earrings, renderOrder 1) gets clipped where it's behind the
-    // face. DoubleSide because the reconstructed triangulation has arbitrary
-    // winding — FrontSide would punch random holes in the occluder.
+    
     this.material = new THREE.MeshBasicMaterial({
       colorWrite: false,
       depthWrite: true,
       depthTest: true,
       side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
     });
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
@@ -127,8 +131,7 @@ export class FaceOccluder {
 
   /**
    * @param {{ landmarks, view, faceWidthPx?, zBias?: number }} args
-   * zBias nudges the whole surface toward the camera (px) so hooks that sit
-   * right at the skin get reliably caught; too much would clip the gem.
+   
    */
   update({ landmarks, view, zBias = 12 }) {
     if (!this.visible) return;
