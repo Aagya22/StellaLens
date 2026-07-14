@@ -6,7 +6,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { FaceTracker } from '@/lib/ar/faceTracking';
-import { FaceOccluder } from '@/lib/ar/occlusion';
 import { EarringsSystem } from '@/lib/ar/earrings';
 import { NecklaceSystem } from '@/lib/ar/necklaces';
 import { estimateHeadPose } from '@/lib/ar/headPose';
@@ -24,9 +23,15 @@ const EARRING_FIT = {
   offsetX: 0,
   offsetY: 0,
   offsetZ: 0,
-  scaleMultiplier: 0.65,
+  scaleMultiplier: 1.0,
   smoothingFactor: 0.55,
 };
+
+
+const WEBCAM_VFOV_DEG = 50;
+
+
+const CAMERA_ZOOM = 1.5;
 
 const GEM_MAP = {
   ruby:     '#ff1c6b',
@@ -96,7 +101,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
   const requestRef  = useRef<number | null>(null);
   const trackerRef  = useRef<FaceTracker | null>(null);
-  const occluderRef = useRef<FaceOccluder | null>(null);
   const earringsRef = useRef<EarringsSystem | null>(null);
   const necklacesRef= useRef<NecklaceSystem | null>(null);
   const streamRef   = useRef<MediaStream | null>(null);
@@ -108,7 +112,20 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     let active = true;
     let renderer: THREE.WebGLRenderer | null = null;
     let scene: THREE.Scene | null = null;
-    let camera: THREE.OrthographicCamera | null = null;
+    let camera: any = null; // PerspectiveCamera (earrings) or OrthographicCamera (necklace)
+    const isEar = product.category === 'earrings';
+    let vfovDeg = WEBCAM_VFOV_DEG;
+
+    // Live FOV tuning for the earring perspective camera.
+    const onFovKey = (e: KeyboardEvent) => {
+      if (!camera?.isPerspectiveCamera) return;
+      if (e.key === '[') vfovDeg = Math.max(20, vfovDeg - 1);
+      else if (e.key === ']') vfovDeg = Math.min(90, vfovDeg + 1);
+      else return;
+      camera.fov = vfovDeg;
+      camera.updateProjectionMatrix();
+      console.log('[AR] WEBCAM_VFOV_DEG =', vfovDeg);
+    };
 
     const view = { stageW: 1, stageH: 1, videoW: 1, videoH: 1, cover: { scale: 1, offsetX: 0, offsetY: 0 } };
 
@@ -131,10 +148,19 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       if (!renderer || !camera || !containerRef.current) return;
       updateView();
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      renderer.setSize(view.stageW, view.stageH);
-      const hw = view.stageW / 2, hh = view.stageH / 2;
-      camera.left = -hw; camera.right = hw; camera.top = hh; camera.bottom = -hh;
-      camera.updateProjectionMatrix();
+      if (camera.isPerspectiveCamera) {
+        // Render at the video's own resolution/aspect; the canvas is CSS
+        // object-cover so it crops identically to the video feed.
+        renderer.setSize(view.videoW, view.videoH, false);
+        camera.aspect = view.videoW / view.videoH;
+        camera.fov = vfovDeg;
+        camera.updateProjectionMatrix();
+      } else {
+        renderer.setSize(view.stageW, view.stageH);
+        const hw = view.stageW / 2, hh = view.stageH / 2;
+        camera.left = -hw; camera.right = hw; camera.top = hh; camera.bottom = -hh;
+        camera.updateProjectionMatrix();
+      }
     };
 
     const initAR = async () => {
@@ -176,6 +202,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.setClearColor(0x000000, 0);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.localClippingEnabled = true; // necklace back-of-neck clip plane
         //  Neutral keeps the gold gold.
         renderer.toneMapping = THREE.NeutralToneMapping;
         renderer.toneMappingExposure = 1.0;
@@ -189,12 +216,22 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(200, 400, 600); scene.add(key); keyRef.current = key;
         const fill = new THREE.DirectionalLight(0xffffff, 0.8); fill.position.set(-300, 200, 200); scene.add(fill); fillRef.current = fill;
 
-        const hw = view.stageW / 2, hh = view.stageH / 2;
-        camera = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.1, 2000);
-        camera.position.set(0, 0, 1000); camera.lookAt(0, 0, 0);
+        if (isEar) {
+          // Real 3D camera at the origin looking down -Z. Earrings are placed
+          // in MediaPipe's metric space; this camera projects them correctly
+          // at every position in the frame (no manual reprojection).
+          camera = new THREE.PerspectiveCamera(vfovDeg, view.videoW / view.videoH, 0.01, 100);
+          camera.position.set(0, 0, 0);
+          camera.lookAt(0, 0, -1);
+        } else {
+          const hw = view.stageW / 2, hh = view.stageH / 2;
+          camera = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.1, 2000);
+          camera.position.set(0, 0, 1000); camera.lookAt(0, 0, 0);
+        }
         resizeRenderer();
         window.addEventListener('resize', resizeRenderer);
         window.addEventListener('orientationchange', resizeRenderer);
+        window.addEventListener('keydown', onFovKey);
 
         setLoadingMsg('Loading Face AI Models...');
         const tracker = new FaceTracker();
@@ -212,7 +249,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         earringsRef.current.setVisible(product.category === 'earrings');
         necklacesRef.current.setVisible(product.category === 'necklaces');
         if (product.category === 'earrings') await earringsRef.current.loadModel(product.modelPath, { singleEarring: product.pair === true, preserveMaterials: product.preserveMaterials === true, anchor: product.earAnchor, dangle: product.dangle, fit: product.arFit, materials: product.arMaterials, skinPenetration: product.skinPenetration, contactShadow: product.contactShadow, type: product.arType, fixedNodes: product.fixedNodes });
-        else await necklacesRef.current.loadModel(product.modelPath);
+        else await necklacesRef.current.loadModel(product.modelPath, { anchor: product.necklaceAnchor, scale: product.arFit?.scale, rotationFix: product.arFit?.rotationDeg, preserveMaterials: product.preserveMaterials === true } as any);
         setLoadingMsg('');
 
         let lastNow = performance.now(), lastVideoTime = -1, lastDetectionMs = 0, lastDet: any = null, frameCount = 0, trackingLostMs = 0;
@@ -303,9 +340,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             }
             if (det) {
               trackingLostMs = 0;
-              // Face re-found: restore visibility (it's cleared on dropout below,
-              // and must come back or the jewellery vanishes permanently).
-              occluderRef.current?.setVisible(true);
+              // Face re-found: restore visibility (cleared on dropout below).
               earringsRef.current?.setVisible(product.category === 'earrings');
               necklacesRef.current?.setVisible(product.category === 'necklaces');
               const headPose = estimateHeadPose(det.poseMatrix), poseQuat = headPose.quaternion;
@@ -313,11 +348,10 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               let anchorsVal = { left: leftEar, right: rightEar };
               if (leftEar.x > rightEar.x) anchorsVal = { left: rightEar, right: leftEar };
               const faceWidthPx = Math.abs(anchorsVal.right.x - anchorsVal.left.x) * view.videoW * view.cover.scale;
-              occluderRef.current?.update({ landmarks: det.landmarks, view, zBias: 12 });
               if (product.category === 'earrings' && earringsRef.current) {
                 earringsRef.current.update({ anchors: anchorsVal, landmarks: det.landmarks, view, faceWidthPx, poseQuat, poseMatrix: det.poseMatrix, headPose, settings: EARRING_FIT, dtSeconds });
               } else if (product.category === 'necklaces' && necklacesRef.current) {
-                necklacesRef.current.update({ anchors: { chin: det.chin, jawLeft: det.jawLeft, jawRight: det.jawRight, neck: det.neck }, view, jawWidthPx: faceWidthPx, poseQuat, dtSeconds });
+                necklacesRef.current.update({ landmarks: det.landmarks, view, headPose, dtSeconds });
               }
               // Ramp presence up (fade back in) while tracked.
               earringsRef.current?.applyPresence(true, dtSeconds, 0);
@@ -328,7 +362,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               trackingLostMs += dtSeconds * 1000;
               earringsRef.current?.applyPresence(false, dtSeconds, trackingLostMs);
               necklacesRef.current?.setVisible(false);
-              if (trackingLostMs > 2000) occluderRef.current?.setVisible(false);
             }
           }
           if (renderer && scene && camera) renderer.render(scene, camera);
@@ -345,10 +378,10 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       active = false;
       window.removeEventListener('resize', resizeRenderer);
       window.removeEventListener('orientationchange', resizeRenderer);
+      window.removeEventListener('keydown', onFovKey);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       trackerRef.current?.dispose();
-      occluderRef.current?.dispose();
       earringsRef.current?.dispose();
       necklacesRef.current?.dispose();
       if (renderer) renderer.dispose();
@@ -389,13 +422,13 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           id="camera"
           playsInline muted autoPlay
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-          style={{ transform: 'scaleX(-1)', opacity: 0.92 }}
+          style={{ transform: `scaleX(-1) scale(${CAMERA_ZOOM})`, opacity: 0.92 }}
         />
         <canvas
           ref={canvasRef}
           id="ar-canvas"
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ transform: 'scaleX(-1)' }}
+          style={{ transform: `scaleX(-1) scale(${CAMERA_ZOOM})` }}
         />
 
         {loadingMsg && (

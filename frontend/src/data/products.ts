@@ -17,6 +17,13 @@ export interface Product {
     userRight: { lateral: number; down: number; back: number };
     userLeft: { lateral: number; down: number; back: number };
   };
+  /** Per-model necklace anchor (ratios of jaw width). Overrides NECKLACE_ANCHOR. */
+  necklaceAnchor?: {
+    dropRatio?: number;
+    widthRatio?: number;
+    pitchSensitivity?: number;
+    yawFollow?: number;
+  };
   
   dangle?: {
     stiffness?: number;
@@ -25,6 +32,7 @@ export interface Product {
     response?: number;
     pivotDrop?: number;
     yawFollow?: number;
+    accelDeadZone?: number;
   };
 
   skinPenetration?: number;
@@ -69,15 +77,13 @@ export const PRODUCTS: Product[] = [
     modelRotation: [90, 0, 0],
     pair: true,
     preserveMaterials: true,
-    // Hook levers slightly around the piercing at large swings
     arType: 'dangle',
-    fixedNodes: ['HOOK_3', 'CLASP_2'], // stay rigid to the ear; gems swing below
-    dangle: { pivotDrop: 0.2 },        // pivotDrop unused when fixedNodes present
-    skinPenetration: 0.5,              // hook tip into the lobe
+    dangle: { stiffness: 120, damping: 18, maxSwingDeg: 5, response: 0.003, pivotDrop: 0.3, accelDeadZone: 80 },
+    skinPenetration: 0.5,
     // Calibrated live 2026-07-12
     earAnchor: {
-      userRight: { lateral: 7.8, down: 4.1, back: 4.2 },
-      userLeft:  { lateral: 8.6, down: 4.0, back: 3.9 }
+      userRight: { lateral: 6.6, down: 3.5, back: 4.2 },
+      userLeft:  { lateral: 5.7, down: 3.5, back: 3.9 }
     }
   },
   {
