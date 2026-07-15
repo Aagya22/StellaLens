@@ -17,12 +17,31 @@ export interface Product {
     userRight: { lateral: number; down: number; back: number };
     userLeft: { lateral: number; down: number; back: number };
   };
-  /** Per-model necklace anchor (ratios of jaw width). Overrides NECKLACE_ANCHOR. */
+  necklaceStyle?: 'full' | 'pendant';
+  necklaceStrip?: string[];
+  /** Show the gold/silver metal-tone toggle in the AR view */
+  metalOptions?: boolean;
   necklaceAnchor?: {
-    dropRatio?: number;
-    widthRatio?: number;
-    pitchSensitivity?: number;
+    /** Skull-fixed rotation pivot (top of the spine), head-local cm */
+    pivotOffset?: { x?: number; y?: number; z?: number };
+    /** Pivot → chain centre, straight down in the body frame (cm) */
+    dropCm?: number;
+    /** Spine axis → chest skin, toward the camera (cm) */
+    forwardCm?: number;
+    /** Loop width — should match the neck (cm) */
+    widthCm?: number;
+    /** Vertical size: loop + pendant drop (cm). Omit = same as width */
+    lengthCm?: number;
+    /** 'pendant' style only: the GLB pendant's true size (cm), never stretched */
+    pendantCm?: number;
+    /** Occluder ellipse (matches the MODEL's wrap opening): half-width,
+        half-depth, height in cm */
+    occRxCm?: number;
+    occRzCm?: number;
+    occHCm?: number;
     yawFollow?: number;
+    pitchFollow?: number;
+    rollFollow?: number;
   };
   
   dangle?: {
@@ -82,8 +101,8 @@ export const PRODUCTS: Product[] = [
     skinPenetration: 0.5,
     // Calibrated live 2026-07-12
     earAnchor: {
-      userRight: { lateral: 6.6, down: 3.5, back: 4.2 },
-      userLeft:  { lateral: 5.7, down: 3.5, back: 3.9 }
+      userRight: { lateral: 7.8, down: 3.5, back: 4.2 }, // recalibrated 2026-07-15
+      userLeft:  { lateral: 8.6, down: 3.5, back: 3.9 }  // recalibrated 2026-07-15
     }
   },
   {
@@ -158,7 +177,17 @@ export const PRODUCTS: Product[] = [
     description: "A statement collar hand-carved in solid 22k yellow gold, weighted to rest exactly where it should on the neck.",
     modelPath: "/models/necklaces/orlaith_celestial_chain.glb",
     arEnabled: true,
-    image: "/images/necklace1.png"
+    image: "/images/necklace1.png",
+ 
+    necklaceStrip: ['badan', 'shirley'],
+    // Final on-camera calibration 2026-07-15 (incl. per-model occluder
+    // ellipse — the collar's wrap opening, wider than a bare neck).
+    metalOptions: true,
+    necklaceAnchor: {
+      pivotOffset: { x: -0.3, z: -6 }, dropCm: 3.6,
+      widthCm: 17, lengthCm: 17.3, forwardCm: 3.8,
+      occRxCm: 7.6, occRzCm: 5.5,
+    },
   },
   {
     id: "necklace_locket",
@@ -168,7 +197,15 @@ export const PRODUCTS: Product[] = [
     description: "A polished gold locket on a fine chain — a hidden place for whatever you carry with you.",
     modelPath: "/models/necklaces/luna_locket.glb",
     arEnabled: true,
-    image: "/images/necklace1.png"
+    image: "/images/necklace1.png",
+    // The GLB contains its OWN fine chain + locket (authored at tiny scale).
+    //  2026-07-15.
+    metalOptions: true,
+    necklaceAnchor: {
+      pivotOffset: { x: -0.1, z: -5.2 }, dropCm: 6.0,
+      widthCm: 15.3, forwardCm: 6.5,
+      occRxCm: 12.0, occRzCm: 5.5,
+    },
   },
   {
     id: "necklace_pearl",
@@ -178,7 +215,10 @@ export const PRODUCTS: Product[] = [
     description: "A strand of cultured pearls knotted by hand, finished with a solid gold clasp.",
     modelPath: "/models/necklaces/pleiades_pearl_strand.glb",
     arEnabled: true,
-    image: "/images/necklace1.png"
+    image: "/images/necklace1.png",
+
+    arFit: { rotationDeg: [75, 0, 0] },
+    necklaceAnchor: { widthCm: 13 },
   },
   {
     id: "ring_polaris",

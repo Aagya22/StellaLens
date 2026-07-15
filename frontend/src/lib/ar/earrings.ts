@@ -4,41 +4,8 @@ import * as THREE from "three";
 import { OneEuroVec3, OneEuroQuat } from "./smoothing";
 import { dampHeadPoseQuaternion, poseMatrixToThree } from "./headPose";
 
-/* ─────────────────────────────────────────────────────────────
-   Earlobe calibration — rigid-body anchoring.
-   MediaPipe has no true ear landmarks; the silhouette points near
-   the ears (132/234, 361/454, …) are the jitteriest in the mesh,
-   so the earring is NOT anchored to a live landmark. Instead a
-   fixed face-local offset — in units of interocular distance
-   (outer eye corners, landmarks 33 ↔ 263) — is rotated by the
-   head pose every frame from the stable eye-corner midpoint.
-   Tune per the calibration plan: validate across head yaw range,
-   not just frontal. Left/right kept separate on purpose.
-────────────────────────────────────────────────────────────── */
-/*
-   These offsets are a property of the FACE and are shared by ALL earring
-   models. Per-model tweaks (scale, pivot, rotation, materials) belong in
-   the product config — never here.
 
-   Keyed anatomically: `userRight` = the wearer's right ear, which appears
-   on the RIGHT side of the mirrored camera preview (rendered internally
-   by the stage-left group).
 
-   UNITS: canonical-face CENTIMETERS, relative to the canonical face
-   origin (MediaPipe's metric face space). The offset is multiplied
-   THROUGH the facial transformation matrix in homogeneous coordinates
-   every frame — never added after projection.
-     lateral = outward from the face centerline
-     down    = toward the chin
-     back    = behind the face plane (toward the back of the head)
-
-   Calibrated live (2026-07-12) with the corrected matrix math using the
-   Astraea Diamond Drops model — these are the DEFAULTS. Other earrings
-   get calibrated individually and override via `earAnchor` in their
-   product config. Intentionally asymmetric — do not mirror one side
-   onto the other. To re-tune, reinstate the calibration overlay in
-   ARView (git history has it).
-*/
 export const EAR_ANCHOR = {
   userRight: { lateral: 7.5, down: 3.8, back: 4.4 },
   userLeft:  { lateral: 9.0, down: 3.8, back: 3.9 },
@@ -48,9 +15,7 @@ const fadeStartDeg = 8;  // far ear starts fading
 const fadeEndDeg   = 15; // far ear fully hidden — quick, before it drifts to the cheek
 const HIDE_ALL_DEG = 57; // beyond this, tracking isn't trustworthy — hide both
 
-/* Center tracking zone (fraction of frame). Off-center the hybrid anchor
-   drifts, so fade earrings out as the face leaves the central zone and back
-   in when it returns. ZONE_FADE_MARGIN is the fraction past the edge to fade. */
+
 const TRACKING_ZONE_W = 0.7;
 const TRACKING_ZONE_H = 0.7;
 const ZONE_FADE_MARGIN = 0.1;
@@ -63,7 +28,7 @@ const DANGLE_DEBUG_PIVOT = false;
 const DANGLE_DEBUG_ACCEL = false; // log |accel| fed to the spring
 /* Diagnostic dots: RED = raw matrix-projected ear target (pre-smoothing),
    BLUE = final smoothed earring position. Left ear only. */
-const POSITION_DEBUG = true;
+const POSITION_DEBUG = false;
 
 export const DANGLE_DEFAULTS = {
   stiffness: 120,
@@ -401,6 +366,12 @@ export class EarringsSystem {
     return this._anchor;
   }
 
+  /** True while the occlusion heuristic thinks something (hair, hand,
+      phone) is covering either ear region. Set fresh each update(). */
+  isSideOccluded() {
+    return this._occludedLeft === true || this._occludedRight === true;
+  }
+
   async loadModel(modelPath, { singleEarring = false, preserveMaterials = false, anchor = null, dangle = null, fit = null, materials = null, skinPenetration = 0, contactShadow = null, type = "dangle", fixedNodes = null }: {
     singleEarring?: boolean;
     preserveMaterials?: boolean;
@@ -537,10 +508,6 @@ export class EarringsSystem {
         const pivotY = isFinite(dropBox.max.y) ? dropBox.max.y : 0;
         if (!fixedObjs.length) console.warn("[AR] fixedNodes not found in GLB:", this._fixedNodes);
 
-        // container → fixedGroup (rigid hook) → swing (drop). The swing group
-        // is a CHILD of the fixed group so it inherits the hook's transform
-        // every frame and can only rotate about its local pivot — it can never
-        // drift away from the hook.
         const fixedGroup = new THREE.Group();
         container.add(fixedGroup);
         const swing = new THREE.Group();
@@ -829,11 +796,15 @@ export class EarringsSystem {
         // it must NOT trigger on ordinary head movement.
         const JAW_LIMIT = 0.30;
         const CHEEK_LIMIT = 0.30;
+        this._occludedLeft = false;
+        this._occludedRight = false;
         if (ratioJaw < (1 - JAW_LIMIT) || ratioCheek < (1 - CHEEK_LIMIT)) {
           leftFadeTarget = 0;
+          this._occludedLeft = true;
         }
         if (ratioJaw > (1 + JAW_LIMIT) || ratioCheek > (1 + CHEEK_LIMIT)) {
           rightFadeTarget = 0;
+          this._occludedRight = true;
         }
       }
     }
