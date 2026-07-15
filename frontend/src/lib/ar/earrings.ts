@@ -5,11 +5,21 @@ import { OneEuroVec3, OneEuroQuat } from "./smoothing";
 import { dampHeadPoseQuaternion, poseMatrixToThree } from "./headPose";
 
 
-
 export const EAR_ANCHOR = {
-  userRight: { lateral: 7.5, down: 3.8, back: 4.4 },
-  userLeft:  { lateral: 9.0, down: 3.8, back: 3.9 },
+  userRight: { lateral: 0.2, down: 0.3, back: 0.4 },
+  userLeft:  { lateral: 1.2, down: -0.3, back: 0.4 },
 };
+
+const LOBE_FALLBACK = {
+  screenLeft:  { x: -7.5, y: -3.8, z: -1.5 },
+  screenRight: { x: +9.0, y: -3.8, z: -1.5 },
+};
+const LOBE_MEASURE_MAX_YAW_DEG = 12; // measure only near-frontal poses
+const LOBE_FAST_TAU = 0.12;    // initial convergence — earrings place fast
+const LOBE_MEASURE_TAU = 0.4;  // averaging window while refining
+const LOBE_LOCK_SAMPLES = 60;  // ~1 s of good frames, then FREEZE for the
+                               // session — ears don't move; a live EMA only
+                               // feeds landmark noise into the anchor
 
 const fadeStartDeg = 8;  // far ear starts fading
 const fadeEndDeg   = 15; // far ear fully hidden — quick, before it drifts to the cheek
@@ -36,7 +46,8 @@ export const DANGLE_DEFAULTS = {
   maxSwingDeg: 5,
   response: 0.003,
   pivotDrop: 0.3,      // fraction of height to lower the pivot from the top
-  yawFollow: 0,        // danglers don't rotate with head yaw (studs/hoops 1.0)
+  yawFollow: 0.15,     // mostly camera-facing — user preferred the front view
+                       // over seeing the hook/clutch side on head turns
   accelDeadZone: 80,   // ignore |accel| below this (noise floor)
 };
 
@@ -47,7 +58,8 @@ const MP_VERTICAL_FOV_DEG = 63;
 const CANONICAL_INTEROCULAR_CM = 9.0;
 
 
-const EARRING_MIN_CUTOFF = 1.0;
+// Lower cutoff = stiller when holding still (a touch more lag on fast moves)
+const EARRING_MIN_CUTOFF = 0.6;
 const EARRING_BETA = 0.05;
 
 /* Earring size in canonical metric units (same space as EAR_ANCHOR / the
@@ -61,6 +73,27 @@ const WIDTH_SCALE_MAX = 1.25;
 
 const _poseM = new THREE.Matrix4();
 const _earCam = new THREE.Vector3();
+const _invPose = new THREE.Matrix4();
+const _measL = new THREE.Vector3();
+const _measR = new THREE.Vector3();
+const _occBack = new THREE.Vector3();
+const _pred = new THREE.Vector3();
+
+/* Lobe DEPTH is unobservable from a frontal view (the measurement is
+   geometrically circular in z) — but with the head yawed, the near ear's
+   screen x pins it. Refine z continuously in that window. */
+const LOBE_Z_REFINE_MIN_DEG = 15;
+const LOBE_Z_REFINE_MAX_DEG = 40;
+const LOBE_Z_REFINE_GAIN = 0.08;
+const LOBE_Z_REFINE_MAX_FRAMES = 240; // ~4 s in-window, then z freezes too
+
+const EYE_MID_LOCAL = { x: 0, y: 2.2 };
+
+/* Studs only: a depth-only sphere tucked behind each stud makes its post /
+   clutch side depth-clip into the "lobe", so the gem reads as pierced
+   through skin instead of a decal floating on top. */
+const LOBE_OCC_RADIUS_CM = 1.5;
+const LOBE_OCC_BACK_CM = 0.8;
 // Temps for extracting raw yaw from the pose matrix (visibility check only)
 const _yawPos = new THREE.Vector3();
 const _yawQuat = new THREE.Quaternion();
@@ -290,6 +323,11 @@ export class EarringsSystem {
     this.scene = scene;
     this.loader = gltfLoader;
     this.onStatus = onStatus ?? (() => { });
+    // Per-user measured lobe positions (head-local cm). Start at the average
+    // human fallback; the live measurement EMAs toward this user's anatomy.
+    this._lobeScreenL = new THREE.Vector3(LOBE_FALLBACK.screenLeft.x, LOBE_FALLBACK.screenLeft.y, LOBE_FALLBACK.screenLeft.z);
+    this._lobeScreenR = new THREE.Vector3(LOBE_FALLBACK.screenRight.x, LOBE_FALLBACK.screenRight.y, LOBE_FALLBACK.screenRight.z);
+    this._lobeSamples = 0;
     this.group = new THREE.Group();
     this.group.visible = true;
     this.group.renderOrder = 1;
@@ -372,7 +410,7 @@ export class EarringsSystem {
     return this._occludedLeft === true || this._occludedRight === true;
   }
 
-  async loadModel(modelPath, { singleEarring = false, preserveMaterials = false, anchor = null, dangle = null, fit = null, materials = null, skinPenetration = 0, contactShadow = null, type = "dangle", fixedNodes = null }: {
+  async loadModel(modelPath, { singleEarring = false, preserveMaterials = false, anchor = null, dangle = null, fit = null, materials = null, skinPenetration = 0, contactShadow = null, type = "dangle", fixedNodes = null, pairMirror = "flipX" }: {
     singleEarring?: boolean;
     preserveMaterials?: boolean;
     anchor?: { userRight: { lateral: number; down: number; back: number }; userLeft: { lateral: number; down: number; back: number } } | null;
@@ -383,6 +421,7 @@ export class EarringsSystem {
     contactShadow?: number;
     type?: "dangle" | "hoop" | "stud";
     fixedNodes?: string[] | null;
+    pairMirror?: "flipX" | "rotateY";
   } = {}) {
     this.clear();
    
@@ -455,13 +494,32 @@ export class EarringsSystem {
       if (!leftModel || !rightModel) {
         leftModel = root.clone(true);
         rightModel = root.clone(true);
-        rightModel.scale.x *= -1;
+        if (pairMirror === "rotateY") {
+          // For hooks whose curve is authored in the X plane: a plain X-flip
+          // makes one clutch face forward. Rotating 180° about Y keeps the
+          // clutch facing BACKWARD on both ears.
+          rightModel.rotation.y += Math.PI;
+        } else {
+          rightModel.scale.x *= -1;
+        }
       }
       if (!rotDeg) {
         leftModel.rotation.x = Math.PI / 2;
         rightModel.rotation.x = Math.PI / 2;
       }
       this._mountModels(leftModel, rightModel);
+      if (type === "stud") {
+        const occGeo = new THREE.SphereGeometry(1, 16, 12);
+        const occMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
+        this._lobeOccL = new THREE.Mesh(occGeo, occMat);
+        this._lobeOccR = new THREE.Mesh(occGeo, occMat);
+        for (const o of [this._lobeOccL, this._lobeOccR]) {
+          o.renderOrder = -1; // writes depth BEFORE the stud renders
+          o.frustumCulled = false;
+          o.scale.setScalar(LOBE_OCC_RADIUS_CM);
+          this.group.add(o);
+        }
+      }
       // Preserved models keep their authored gem colors until the user
       // actively picks a swatch (setGemColors still works when called).
       if (!preserveMaterials) this.setGemColors(this._topGemColor, this._bottomGemColor);
@@ -704,6 +762,14 @@ export class EarringsSystem {
       disposeObject3D(this._modelRoot);
       this._modelRoot = null;
     }
+    if (this._lobeOccL) {
+      this._lobeOccL.geometry.dispose();
+      this._lobeOccL.material.dispose();
+      this.group.remove(this._lobeOccL);
+      this.group.remove(this._lobeOccR);
+      this._lobeOccL = null;
+      this._lobeOccR = null;
+    }
     for (const container of [this.left, this.right]) {
       while (container.children.length) {
         const child = container.children[0];
@@ -827,17 +893,105 @@ export class EarringsSystem {
     this._leftFade = leftFadeTarget;
     this._rightFade = rightFadeTarget;
     this._applyOpacity();
-    // Position purely in 3D metric space: ear = calibrated canonical offset
-    // × facial transformation matrix. The scene's PerspectiveCamera projects
-    // it — no manual reprojection. Rendered correctly at every frame position.
+    // Position in 3D metric space, anchored to THIS USER'S measured lobes:
+    // ear = (measured lobe local + small per-product offset) × pose matrix.
     let leftTarget, rightTarget;
     if (landmarks && landmarks.length >= 468 && poseMatrix && poseMatrix.length === 16) {
       poseMatrixToThree(poseMatrix, _poseM);
+
+      // ── Per-user lobe measurement ─────────────────────────────────────
+      // Unproject the 2D lobe estimates (EarAnchor landmark clusters)
+      // through MediaPipe's own camera model to metric space, transform
+      // into HEAD-LOCAL coordinates, and EMA-average while near-frontal.
+      // Landmark jitter averages away; head turns reuse the converged
+      // local point rigidly — landmark adaptivity + matrix stability.
+      const aspect = (view?.videoW || 16) / (view?.videoH || 9);
+      const halfH = Math.tan(THREE.MathUtils.degToRad(MP_VERTICAL_FOV_DEG / 2));
+      const halfW = halfH * aspect;
+      if (
+        this._lobeSamples < LOBE_LOCK_SAMPLES &&
+        anchors?.left && anchors?.right && headPose &&
+        Math.abs(yawDeg) < LOBE_MEASURE_MAX_YAW_DEG &&
+        (anchors.left.confidence ?? 0) > 0.9 &&
+        (anchors.right.confidence ?? 0) > 0.9 &&
+        !this._occludedLeft && !this._occludedRight
+      ) {
+        // RATIO measurement: lobe offset from the eye midpoint, in units of
+        // the interocular distance, mapped to canonical cm. Ratios cancel
+        // FOV, camera distance, and depth assumptions — the failure modes
+        // of the earlier unprojection approach. Valid because this branch
+        // is gated near-frontal (head-local x/y ≈ camera-plane x/y).
+        const eyeL = landmarks[33], eyeR = landmarks[263];
+        const vw = view?.videoW || 640, vh = view?.videoH || 480;
+        const iodPx = Math.hypot((eyeR.x - eyeL.x) * vw, (eyeR.y - eyeL.y) * vh);
+        if (iodPx < 30) { /* face too small/far — skip this frame */ }
+        else {
+          const s = CANONICAL_INTEROCULAR_CM / iodPx;
+          const midX = ((eyeL.x + eyeR.x) / 2) * vw;
+          const midY = ((eyeL.y + eyeR.y) / 2) * vh;
+          const mL = _measL.set(
+            (anchors.left.x * vw - midX) * s + EYE_MID_LOCAL.x,
+            (midY - anchors.left.y * vh) * s + EYE_MID_LOCAL.y,
+            LOBE_FALLBACK.screenLeft.z
+          );
+          const mR = _measR.set(
+            (anchors.right.x * vw - midX) * s + EYE_MID_LOCAL.x,
+            (midY - anchors.right.y * vh) * s + EYE_MID_LOCAL.y,
+            LOBE_FALLBACK.screenRight.z
+          );
+        // Anatomy fence: real lobes vary from the average human by ~±2 cm,
+        // so the measurement may ADJUST the fallback, never replace it with
+        // nonsense (protects against estimator/depth bugs and glitch frames).
+        const fence = (v, fb) => {
+          v.x = THREE.MathUtils.clamp(v.x, fb.x - 2.5, fb.x + 2.5);
+          v.y = THREE.MathUtils.clamp(v.y, fb.y - 2.5, fb.y + 2.5);
+          v.z = THREE.MathUtils.clamp(v.z, fb.z - 2.0, fb.z + 2.0);
+          return v;
+        };
+          fence(mL, LOBE_FALLBACK.screenLeft);
+          fence(mR, LOBE_FALLBACK.screenRight);
+          // Fast first, then average, then LOCK (gated above).
+          const tau = this._lobeSamples < 20 ? LOBE_FAST_TAU : LOBE_MEASURE_TAU;
+          const alpha = 1 - Math.exp(-Math.min(0.05, dtSeconds || 0.016) / tau);
+          this._lobeScreenL.lerp(mL, alpha);
+          this._lobeScreenR.lerp(mR, alpha);
+          if (++this._lobeSamples === LOBE_LOCK_SAMPLES) {
+            const f = (v) => v.toArray().map((c) => +c.toFixed(1));
+            console.info("[AR] lobes LOCKED (head-local cm): screenL", f(this._lobeScreenL), "screenR", f(this._lobeScreenR));
+          }
+        }
+      }
+
+      // ── Depth refinement while yawed ──────────────────────────────────
+      // The near ear stays confidently tracked at moderate yaw; the gap
+      // between its observed screen x and the locked point's predicted x
+      // is (to first order) sin(yaw) · z-error. Small fenced feedback —
+      // this is what stops the earring floating off the ear on head turns.
+      if (anchors && headPose && (this._zRefineFrames | 0) < LOBE_Z_REFINE_MAX_FRAMES) {
+        const ay = Math.abs(yawDeg);
+        if (ay > LOBE_Z_REFINE_MIN_DEG && ay < LOBE_Z_REFINE_MAX_DEG) {
+          const nearIsScreenLeft = yawDeg > 0;
+          const n = nearIsScreenLeft ? anchors.left : anchors.right;
+          const lobe = nearIsScreenLeft ? this._lobeScreenL : this._lobeScreenR;
+          const fb = nearIsScreenLeft ? LOBE_FALLBACK.screenLeft : LOBE_FALLBACK.screenRight;
+          const sinYaw = Math.sin(headPose.yaw ?? 0);
+          if ((n?.confidence ?? 0) > 0.9 && Math.abs(sinYaw) > 0.25) {
+            _pred.copy(lobe).applyMatrix4(_poseM);
+            const d = Math.max(10, -_pred.z);
+            const obsXcm = (n.x * 2 - 1) * halfW * d;
+            const dz = THREE.MathUtils.clamp((obsXcm - _pred.x) / sinYaw, -0.6, 0.6) * LOBE_Z_REFINE_GAIN;
+            lobe.z = THREE.MathUtils.clamp(lobe.z + dz, fb.z - 2.5, fb.z + 2.5);
+            this._zRefineFrames = (this._zRefineFrames | 0) + 1;
+          }
+        }
+      }
+
       const oR = this._anchor.userRight;
       const oL = this._anchor.userLeft;
       const skin = this._skin;
-      leftTarget  = new THREE.Vector3(-oR.lateral, -oR.down, -(oR.back + skin)).applyMatrix4(_poseM);
-      rightTarget = new THREE.Vector3(+oL.lateral, -oL.down, -(oL.back + skin)).applyMatrix4(_poseM);
+      const lobeL = this._lobeScreenL, lobeR = this._lobeScreenR;
+      leftTarget  = new THREE.Vector3(lobeL.x - oR.lateral, lobeL.y - oR.down, lobeL.z - (oR.back + skin)).applyMatrix4(_poseM);
+      rightTarget = new THREE.Vector3(lobeR.x + oL.lateral, lobeR.y - oL.down, lobeR.z - (oL.back + skin)).applyMatrix4(_poseM);
     }
     if (!leftTarget || !rightTarget) {
       // No matrix this frame — freeze at the last smoothed position.
@@ -848,6 +1002,13 @@ export class EarringsSystem {
     const rightPos = this._rightPos.filter(rightTarget, dtSeconds);
     this.left.position.copy(leftPos);
     this.right.position.copy(rightPos);
+    if (this._lobeOccL && this._lobeOccR) {
+      // Behind the stud along the head's backward axis (full raw rotation,
+      // extracted above for the yaw fade).
+      _occBack.set(0, 0.2, -LOBE_OCC_BACK_CM).applyQuaternion(_yawQuat);
+      this._lobeOccL.position.copy(leftPos).add(_occBack);
+      this._lobeOccR.position.copy(rightPos).add(_occBack);
+    }
     if (POSITION_DEBUG && this._dbgRed) {
       this._dbgRed.position.copy(leftTarget); // raw matrix projection (offsets are 0)
       this._dbgBlue.position.copy(leftPos);   // after One Euro smoothing

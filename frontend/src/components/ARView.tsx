@@ -6,8 +6,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { FaceTracker } from '@/lib/ar/faceTracking';
+import { HandTracker } from '@/lib/ar/handTracking';
+import { BodyFitSession } from '@/lib/ar/bodyFit';
 import { EarringsSystem } from '@/lib/ar/earrings';
 import { NecklaceSystem } from '@/lib/ar/necklaces';
+import { RingSystem } from '@/lib/ar/rings';
 import { estimateHeadPose } from '@/lib/ar/headPose';
 import { EarAnchor } from '@/lib/ar/earAnchor';
 import { Product, PRODUCTS } from '@/data/products';
@@ -151,9 +154,10 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   }, [activeProduct, calibEar]);
 
   const requestRef  = useRef<number | null>(null);
-  const trackerRef  = useRef<FaceTracker | null>(null);
+  const trackerRef  = useRef<FaceTracker | HandTracker | null>(null);
   const earringsRef = useRef<EarringsSystem | null>(null);
   const necklacesRef= useRef<NecklaceSystem | null>(null);
+  const ringsRef    = useRef<RingSystem | null>(null);
   const streamRef   = useRef<MediaStream | null>(null);
   const ambientRef  = useRef<THREE.AmbientLight | null>(null);
   const keyRef      = useRef<THREE.DirectionalLight | null>(null);
@@ -261,7 +265,9 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         const fill = new THREE.DirectionalLight(0xffffff, 0.8); fill.position.set(-300, 200, 200); scene.add(fill); fillRef.current = fill;
 
    
-        camera = new THREE.PerspectiveCamera(vfovDeg, view.videoW / view.videoH, 0.01, 100);
+        // near=4cm: with cm units, a tiny near plane collapses depth-buffer
+        // precision at face distance — ring wrap (mm margins) z-fights.
+        camera = new THREE.PerspectiveCamera(vfovDeg, view.videoW / view.videoH, 4, 200);
         camera.position.set(0, 0, 0);
         camera.lookAt(0, 0, -1);
         resizeRenderer();
@@ -269,28 +275,41 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         window.addEventListener('orientationchange', resizeRenderer);
         window.addEventListener('keydown', onFovKey);
 
-        setLoadingMsg('Loading Face AI Models...');
-        const tracker = new FaceTracker();
+        const isRing = activeProduct.category === 'rings';
+        setLoadingMsg(isRing ? 'Loading Hand AI Models...' : 'Loading Face AI Models...');
+        // Rings track the HAND; everything else tracks the face. The two
+        // trackers share the same interface (init/ready/detect/dispose).
+        const tracker: any = isRing ? new HandTracker() : new FaceTracker();
         await tracker.init();
 
         if (!active) { tracker.dispose(); return; }
         trackerRef.current = tracker;
 
-        
+
         const gltfLoader = new GLTFLoader();
         earringsRef.current  = new EarringsSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
         necklacesRef.current = new NecklaceSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
+        ringsRef.current     = new RingSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
 
         setLoadingMsg('Loading 3D Product...');
         earringsRef.current.setVisible(activeProduct.category === 'earrings');
         necklacesRef.current.setVisible(activeProduct.category === 'necklaces');
-        if (activeProduct.category === 'earrings') await earringsRef.current.loadModel(activeProduct.modelPath, { singleEarring: activeProduct.pair === true, preserveMaterials: activeProduct.preserveMaterials === true, anchor: activeProduct.earAnchor, dangle: activeProduct.dangle, fit: activeProduct.arFit, materials: activeProduct.arMaterials, skinPenetration: activeProduct.skinPenetration, contactShadow: activeProduct.contactShadow, type: activeProduct.arType, fixedNodes: activeProduct.fixedNodes });
-        else await necklacesRef.current.loadModel(activeProduct.modelPath, { anchor: activeProduct.necklaceAnchor, scale: activeProduct.arFit?.scale, rotationFix: activeProduct.arFit?.rotationDeg, preserveMaterials: activeProduct.preserveMaterials === true, style: activeProduct.necklaceStyle, stripNodes: activeProduct.necklaceStrip } as any);
+        ringsRef.current.setVisible(false); // shown when a hand is detected
+        if (activeProduct.category === 'earrings') await earringsRef.current.loadModel(activeProduct.modelPath, { singleEarring: activeProduct.pair === true, preserveMaterials: activeProduct.preserveMaterials === true, anchor: activeProduct.earAnchor, dangle: activeProduct.dangle, fit: activeProduct.arFit, materials: activeProduct.arMaterials, skinPenetration: activeProduct.skinPenetration, contactShadow: activeProduct.contactShadow, type: activeProduct.arType, fixedNodes: activeProduct.fixedNodes, pairMirror: activeProduct.pairMirror });
+        else if (activeProduct.category === 'necklaces') await necklacesRef.current.loadModel(activeProduct.modelPath, { anchor: activeProduct.necklaceAnchor, scale: activeProduct.arFit?.scale, rotationFix: activeProduct.arFit?.rotationDeg, preserveMaterials: activeProduct.preserveMaterials === true, style: activeProduct.necklaceStyle, stripNodes: activeProduct.necklaceStrip } as any);
+        else if (activeProduct.category === 'rings') await ringsRef.current.loadModel(activeProduct.modelPath, { fit: activeProduct.ringFit, scale: activeProduct.arFit?.scale, rotationFix: activeProduct.arFit?.rotationDeg, preserveMaterials: activeProduct.preserveMaterials === true } as any);
         setLoadingMsg('');
 
         let lastNow = performance.now(), lastVideoTime = -1, lastDetectionMs = 0, lastDet: any = null, frameCount = 0, trackingLostMs = 0;
         // User-guidance state (earrings): centred / still / unobstructed.
         let guidePrevX = -1, guidePrevY = -1, guideSpeed = 0, occludedMs = 0, lastGuide = '';
+        // Tier-2 body fit (necklaces): one-time shoulder measurement, then
+        // the pose model shuts down and the face-only pipeline runs alone.
+        let bodyFit: any = null; // BodyFitSession (its module is @ts-nocheck)
+        if (activeProduct.category === 'necklaces') {
+          bodyFit = new BodyFitSession();
+          bodyFit.init().catch((e: any) => { console.warn('[AR] body fit unavailable:', e?.message ?? e); bodyFit = null; });
+        }
         const leftEarAnchor = EarAnchor.defaultLeft(), rightEarAnchor = EarAnchor.defaultRight();
         // One small offscreen canvas (64×64) for ALL scene-lighting sampling —
         // never the full camera frame. Throttled harder on mobile.
@@ -305,12 +324,19 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         let envMulSmooth = 1;     // env-intensity multiplier, ~90-frame avg
 
         const loop = (now: number) => {
-          if (!active) return;
+          if (!active) { bodyFit?.dispose(); bodyFit = null; return; }
           requestRef.current = requestAnimationFrame(loop);
           const dtSeconds = Math.min(0.05, (now - lastNow) / 1000); lastNow = now;
           const video = videoRef.current;
           if (video && video.readyState >= 2 && video.videoWidth > 0 && tracker.ready) {
             frameCount++;
+            if (bodyFit && bodyFit.done === false) {
+              bodyFit.sample(video, now);
+              if (bodyFit.done) {
+                necklacesRef.current?.setBodyScale(bodyFit.scale);
+                bodyFit = null;
+              }
+            }
             if (frameCount % SAMPLE_EVERY === 0 && offscreenCtx) {
               try {
                 offscreenCtx.drawImage(video, 0, 0, 64, 64);
@@ -378,6 +404,10 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             }
             if (det) {
               trackingLostMs = 0;
+              if (isRing) {
+                ringsRef.current?.setVisible(true);
+                ringsRef.current?.update({ hand: det, view, dtSeconds });
+              }
               // User guidance: when the face is off-centre, moving fast, or
               // an ear is covered, HIDE the jewelry 
               let guide = '';
@@ -421,7 +451,11 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               trackingLostMs += dtSeconds * 1000;
               earringsRef.current?.applyPresence(false, dtSeconds, trackingLostMs);
               necklacesRef.current?.setVisible(false);
-              if (lastGuide) { lastGuide = ''; setGuideMsg(''); }
+              if (isRing) {
+                ringsRef.current?.setVisible(false);
+                const handGuide = 'Show your hand to the camera';
+                if (trackingLostMs > 800 && lastGuide !== handGuide) { lastGuide = handGuide; setGuideMsg(handGuide); }
+              } else if (lastGuide) { lastGuide = ''; setGuideMsg(''); }
             }
           }
           if (renderer && scene && camera) renderer.render(scene, camera);
@@ -444,6 +478,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       trackerRef.current?.dispose();
       earringsRef.current?.dispose();
       necklacesRef.current?.dispose();
+      ringsRef.current?.dispose();
       if (renderer) renderer.dispose();
     };
   }, [activeProduct]);

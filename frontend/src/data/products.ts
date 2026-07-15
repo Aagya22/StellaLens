@@ -10,6 +10,8 @@ export interface Product {
   customizeColors?: boolean;
   modelRotation?: [number, number, number];
   pair?: boolean;
+
+  pairMirror?: 'flipX' | 'rotateY';
   /** Render the GLB's authored materials exactly as-is */
   preserveMaterials?: boolean;
   /** Per-model ear-anchor calibration (canonical cm).  */
@@ -21,6 +23,13 @@ export interface Product {
   necklaceStrip?: string[];
   /** Show the gold/silver metal-tone toggle in the AR view */
   metalOptions?: boolean;
+  /** Ring placement on the ring finger (see rings.ts RING_FIT) */
+  ringFit?: {
+    alongT?: number;        // 0 = knuckle, 1 = first joint
+    diameterScale?: number; // outer diameter ÷ measured finger width
+    diameterCm?: number;    // fallback (no world landmarks), real-world cm
+    liftCm?: number;
+  };
   necklaceAnchor?: {
     /** Skull-fixed rotation pivot (top of the spine), head-local cm */
     pivotOffset?: { x?: number; y?: number; z?: number };
@@ -99,10 +108,10 @@ export const PRODUCTS: Product[] = [
     arType: 'dangle',
     dangle: { stiffness: 120, damping: 18, maxSwingDeg: 5, response: 0.003, pivotDrop: 0.3, accelDeadZone: 80 },
     skinPenetration: 0.5,
-    // Calibrated live 2026-07-12
+
     earAnchor: {
-      userRight: { lateral: 7.8, down: 3.5, back: 4.2 }, // recalibrated 2026-07-15
-      userLeft:  { lateral: 8.6, down: 3.5, back: 3.9 }  // recalibrated 2026-07-15
+      userRight: { lateral: 0.1, down: 0.3, back: 0.4 },
+      userLeft:  { lateral: 1.2, down: -0.3, back: 0.4 }
     }
   },
   {
@@ -121,10 +130,11 @@ export const PRODUCTS: Product[] = [
     arType: 'hoop',       // rigid loop, full yaw-follow, no swing physics
     arFit: { rotationDeg: [0, 0, 0], scale: 1.2 },
     skinPenetration: 0.5,
-    // Calibrated live 2026-07-12
+    // User-calibrated under the old estimator, translated by the per-side
+    // estimator delta measured on Astraea — verify on camera.
     earAnchor: {
-      userRight: { lateral: 7.9, down: 1.8, back: 3.7 },
-      userLeft:  { lateral: 8.9, down: 2.0, back: 3.8 }
+      userRight: { lateral: 1.1, down: -1.9, back: 1.4 },
+      userLeft:  { lateral: 1.2, down: -1.9, back: 1.5 }
     }
   },
   {
@@ -140,10 +150,11 @@ export const PRODUCTS: Product[] = [
     arType: 'stud',       // flat, rigid to the lobe, no physics at all
     skinPenetration: 1.5, // post fully hidden, gem sits flush on the lobe
     contactShadow: 0.5,   // stud presses flat → wider contact shadow
-    // Calibrated live 2026-07-12
+    // User-calibrated under the old estimator, translated by the per-side
+    // estimator delta measured on Astraea — verify on camera.
     earAnchor: {
-      userRight: { lateral: 8.6, down: 1.5, back: 3.5 },
-      userLeft:  { lateral: 7.8, down: 1.8, back: 3.9 }
+      userRight: { lateral: 0.9, down: -2.4, back: 0.0 },
+      userLeft:  { lateral: 0.4, down: -2.8, back: 0.7 }
     },
     
     arMaterials: [
@@ -162,12 +173,15 @@ export const PRODUCTS: Product[] = [
     image: "/images/earrings1.png",
     // The GLB is a SINGLE earring (cube + gem sphere + torus assembly).
     pair: true,
+    pairMirror: 'rotateY', // X-mirror made one clutch face forward
     preserveMaterials: true,
    
     arType: 'dangle',     // single mesh, no fixedNodes → whole-model pivotDrop swing
     dangle: { pivotDrop: 0.25 },
-    arFit: { rotationDeg: [90, 90, 0], scale: 1.4 },
-    skinPenetration: 0.5 // dangler → default yawFollow 0.2, hook tip into lobe
+    // Authored hanging (hook up, ball down) but turned 90° in yaw — from the
+    // front you saw the hook's full profile instead of its thin edge.
+    arFit: { rotationDeg: [0, 90, 0], scale: 1.2 },
+    skinPenetration: 0.5 // hook tip into lobe
   },
   {
     id: "necklace_orlaith",
@@ -217,8 +231,16 @@ export const PRODUCTS: Product[] = [
     arEnabled: true,
     image: "/images/necklace1.png",
 
+    // Flat ring GLB tilted into the worn plane; pearls keep their authored
+    // material (no gold override, no metal toggle). Anchor/occluder start
+    // from Orlaith's verified wrap values — fine-tune on camera.
+    preserveMaterials: true,
     arFit: { rotationDeg: [75, 0, 0] },
-    necklaceAnchor: { widthCm: 13 },
+    necklaceAnchor: {
+      pivotOffset: { z: -6 }, dropCm: 4,
+      widthCm: 14, forwardCm: 2,
+      occRxCm: 7.0, occRzCm: 5.5,
+    },
   },
   {
     id: "ring_polaris",
@@ -227,8 +249,14 @@ export const PRODUCTS: Product[] = [
     price: "$2,400",
     description: "A brilliant-cut solitaire held in a four-prong crown, on a pavé-lined band made to measure.",
     modelPath: "/models/rings/polaris_solitaire.glb",
-    arEnabled: false,
-    image: "/images/ring1.png"
+    arEnabled: true, // hand-tracked try-on (ring finger)
+    image: "/images/ring1.png",
+    preserveMaterials: true,
+    // GLB hole axis loads along world X (band faced the camera) → roll 90°
+    // to put it along the finger. If the gem points at the palm, use -90.
+    arFit: { rotationDeg: [0, 0, 90] },
+    // Sized by the model's measured HOLE ≈ finger width × diameterScale.
+    ringFit: { alongT: 0.5, diameterScale: 1.05 },
   },
   {
     id: "ring_rosanna",
@@ -237,8 +265,15 @@ export const PRODUCTS: Product[] = [
     price: "$1,600",
     description: "A slender band traced with pavé-set stones, cast as a single piece and signed in gold.",
     modelPath: "/models/rings/rosanna_pave_band.glb",
-    arEnabled: false,
-    image: "/images/ring1.png"
+    // ⚠ 61 MB GLB — works, but loads slowly; re-export compressed for ship.
+    arEnabled: true,
+    image: "/images/ring1.png",
+    preserveMaterials: true,
+    // Two rotations align the hole axis; [44,…] showed the band's BACK —
+    // the 180° twin puts the pavé face outward.
+    arFit: { rotationDeg: [-136, 0, 0] },
+    // Sized by the model's measured HOLE ≈ finger width × diameterScale.
+    ringFit: { alongT: 0.5, diameterScale: 1.05 },
   },
   {
     id: "bracelet_callisto",

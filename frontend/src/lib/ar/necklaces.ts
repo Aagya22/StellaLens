@@ -182,6 +182,13 @@ export class NecklaceSystem {
 
   getAnchor() { return this._anchor; }
 
+  /** Tier-2 body fit: scales the PERSON-dependent dimensions (drop, neck
+      occluder, forward) — never the jewelry itself, which has a fixed
+      real-world size on every body. 1.0 = the calibrating user. */
+  setBodyScale(s) {
+    this._bodyScale = THREE.MathUtils.clamp(s || 1, 0.75, 1.3);
+  }
+
   /** Recolour the (non-preserved) metal materials: 'gold' | 'silver'. */
   setMetalTone(tone) {
     this._tone = tone === "silver" ? "silver" : "gold";
@@ -361,7 +368,8 @@ export class NecklaceSystem {
     // LINK 2 — drape: from the pivot, down and forward in the BODY frame
     // (damped rotation). Head pitch never touches this link, so re-approaching
     // the camera with a different head tilt lands the chain in the same place.
-    _drape.set(0, -a.dropCm, a.forwardCm).applyQuaternion(quat);
+    const bs = this._bodyScale || 1;
+    _drape.set(0, -a.dropCm * bs, a.forwardCm * bs).applyQuaternion(quat);
     this.group.position.copy(pivot).add(_drape);
     this.group.quaternion.copy(quat);
     if (this._style === "pendant") {
@@ -387,7 +395,7 @@ export class NecklaceSystem {
     // The necklace's back half depth-clips behind it.
     this._neckOccluder.position.copy(pivot);
     this._neckOccluder.quaternion.copy(quat);
-    this._neckOccluder.scale.set(a.occRxCm, a.occHCm, a.occRzCm);
+    this._neckOccluder.scale.set(a.occRxCm * bs, a.occHCm * bs, a.occRzCm * bs);
 
     // Fade: yaw + centre zone (measured at the chin, normalized frame).
     const chin = landmarks[152];
