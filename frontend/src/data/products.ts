@@ -25,10 +25,18 @@ export interface Product {
   metalOptions?: boolean;
   /** Ring placement on the ring finger (see rings.ts RING_FIT) */
   ringFit?: {
-    alongT?: number;        // 0 = knuckle, 1 = first joint
-    diameterScale?: number; // outer diameter ÷ measured finger width
-    diameterCm?: number;    // fallback (no world landmarks), real-world cm
-    liftCm?: number;
+    alongT?: number;   // 0 = knuckle, 1 = first joint
+    sizeCm?: number;   // ring size as a multiple of on-screen knuckle spacing
+    liftCm?: number;   // seat depth along the palm normal
+    tiltDamp?: number; // 1 = follow finger depth-tilt, 0 = frontal
+    gemFlip?: boolean; // model's gem sits on -normal → flip it to the back
+  };
+  /** Bracelet placement on the wrist (see bracelets.ts BRACELET_FIT).
+      Display props baked into the GLB are stripped via necklaceStrip. */
+  braceletFit?: {
+    loose?: number;    // hole = measured wrist width × this
+    offsetCm?: number; // below the wrist crease, toward the forearm
+    wristCm?: number;  // fallback wrist width (no world landmarks)
   };
   necklaceAnchor?: {
     /** Skull-fixed rotation pivot (top of the spine), head-local cm */
@@ -163,25 +171,50 @@ export const PRODUCTS: Product[] = [
     ]
   },
   {
-    id: "earring_nova",
-    name: "Nova Drops",
+    id: "earring_anarkali",
+    name: "Anarkali Drops",
     category: "earrings",
-    price: "$920",
-    description: "Slender drop earrings in polished gold, made to move with every turn of the head.",
-    modelPath: "/models/earrings/nova_drops.glb",
+    price: "$1,050",
+    description: "Layered gold drops in the Anarkali tradition, finished by hand.",
+    modelPath: "/models/earrings/anarkali_earring.glb",
     arEnabled: true,
     image: "/images/earrings1.png",
-    // The GLB is a SINGLE earring (cube + gem sphere + torus assembly).
+    // Same process as Astraea; borrows its lobe calibration for now.
     pair: true,
-    pairMirror: 'rotateY', // X-mirror made one clutch face forward
     preserveMaterials: true,
-   
-    arType: 'dangle',     // single mesh, no fixedNodes → whole-model pivotDrop swing
-    dangle: { pivotDrop: 0.25 },
-    // Authored hanging (hook up, ball down) but turned 90° in yaw — from the
-    // front you saw the hook's full profile instead of its thin edge.
-    arFit: { rotationDeg: [0, 90, 0], scale: 1.2 },
-    skinPenetration: 0.5 // hook tip into lobe
+    arType: 'dangle',
+    dangle: { pivotDrop: 0.3 },
+    skinPenetration: 0.5,
+    // The GLB is authored ALREADY worn-upright (hoop up, dome + beads down);
+    // explicit zeros skip the engine's default tilt, which is what had it
+    // facing/flipping wrong. ([180,…] rendered it exactly upside down.)
+    arFit: { rotationDeg: [0, 0, 0] },
+    earAnchor: {
+      userRight: { lateral: 0.1, down: 0.3, back: 0.4 },
+      userLeft:  { lateral: 1.2, down: -0.3, back: 0.4 }
+    }
+  },
+  {
+    id: "earring_raflesia",
+    name: "Raflesia Two-Layer Drops",
+    category: "earrings",
+    price: "$1,180",
+    description: "A two-tier floral drop earring, blooming in solid gold.",
+    modelPath: "/models/earrings/raflesia_single.glb",
+    arEnabled: true,
+    image: "/images/earrings1.png",
+    pair: true,
+    preserveMaterials: true,
+    arType: 'dangle',
+    dangle: { pivotDrop: 0.3 },
+    skinPenetration: 0.5,
+    // Single-earring GLB authored ALREADY hanging (long axis Y, hook at top,
+    // flat face to camera) — explicit zeros skip the engine's default tilt.
+    arFit: { rotationDeg: [0, 0, 0], scale: 1.6 },
+    earAnchor: {
+      userRight: { lateral: 0.1, down: 0.3, back: 0.4 },
+      userLeft:  { lateral: 1.2, down: -0.3, back: 0.4 }
+    }
   },
   {
     id: "necklace_orlaith",
@@ -222,20 +255,18 @@ export const PRODUCTS: Product[] = [
     },
   },
   {
-    id: "necklace_pearl",
-    name: "Pleiades Pearl Strand",
+    id: "necklace_vega",
+    name: "Vega Beaded Necklace",
     category: "necklaces",
-    price: "$1,400",
-    description: "A strand of cultured pearls knotted by hand, finished with a solid gold clasp.",
-    modelPath: "/models/necklaces/pleiades_pearl_strand.glb",
+    price: "$1,250",
+    description: "Hand-strung beads in black, white and red on a fine cord.",
+    modelPath: "/models/necklaces/new.glb",
     arEnabled: true,
     image: "/images/necklace1.png",
-
-    // Flat ring GLB tilted into the worn plane; pearls keep their authored
-    // material (no gold override, no metal toggle). Anchor/occluder start
-    // from Orlaith's verified wrap values — fine-tune on camera.
     preserveMaterials: true,
-    arFit: { rotationDeg: [75, 0, 0] },
+    // Ships on a display prop (SHIRLEY material node, like Orlaith's bust) —
+    // stripped at load so only the beads remain.
+    necklaceStrip: ['shirley', 'polysurface1421'],
     necklaceAnchor: {
       pivotOffset: { z: -6 }, dropCm: 4,
       widthCm: 14, forwardCm: 2,
@@ -255,8 +286,8 @@ export const PRODUCTS: Product[] = [
     // GLB hole axis loads along world X (band faced the camera) → roll 90°
     // to put it along the finger. If the gem points at the palm, use -90.
     arFit: { rotationDeg: [0, 0, 90] },
-    // Sized by the model's measured HOLE ≈ finger width × diameterScale.
-    ringFit: { alongT: 0.5, diameterScale: 1.05 },
+    // Calibrated on camera 2026-07-16 (size = × on-screen knuckle spacing).
+    ringFit: { alongT: 0.62, sizeCm: 1.15 },
   },
   {
     id: "ring_rosanna",
@@ -272,18 +303,21 @@ export const PRODUCTS: Product[] = [
     // Two rotations align the hole axis; [44,…] showed the band's BACK —
     // the 180° twin puts the pavé face outward.
     arFit: { rotationDeg: [-136, 0, 0] },
-    // Sized by the model's measured HOLE ≈ finger width × diameterScale.
-    ringFit: { alongT: 0.5, diameterScale: 1.05 },
+    // Calibrated 2026-07-16; gemFlip → pavé shows on the back of the hand.
+    ringFit: { alongT: 0.5, sizeCm: 1.4, gemFlip: true },
   },
   {
-    id: "bracelet_callisto",
-    name: "Callisto Chain",
-    category: "bracelets",
-    price: "$980",
-    description: "A cable-link chain bracelet in solid gold, sized to your wrist and closed with a toggle clasp.",
-    modelPath: "/models/bracelets/callisto_chain.glb",
-    arEnabled: false,
-    image: "/images/bracelet1.png"
+    id: "ring_silver_moon",
+    name: "Silver Moon Ring",
+    category: "rings",
+    price: "$1,900",
+    description: "A crescent-set band in moonlit silver, poised on the finger.",
+    modelPath: "/models/rings/silver_moon_ring.glb",
+    arEnabled: true,
+    image: "/images/ring1.png",
+    preserveMaterials: true,
+    // Hole axis auto-detected on load; size/gem side calibrate live later.
+    ringFit: { alongT: 0.5, sizeCm: 1.2 },
   },
   {
     id: "bracelet_lyra",
@@ -292,7 +326,25 @@ export const PRODUCTS: Product[] = [
     price: "$1,350",
     description: "Woven gold strands set with blue topaz, clasped in hand-polished gold.",
     modelPath: "/models/bracelets/lyra_topaz_weave.glb",
-    arEnabled: false,
-    image: "/images/bracelet1.png"
+    // ⚠ 35 MB GLB — loads slowly; re-export compressed before ship.
+    arEnabled: true,
+    image: "/images/bracelet1.png",
+    preserveMaterials: true,
+    // The GLB ships ON a velvet display pillow ("Cube.000" / Crushed_Velvet)
+    // — stripped at load, same mechanism as Orlaith's bust.
+    necklaceStrip: ['cube', 'velvet'],
+    braceletFit: { loose: 1.15 },
+  },
+  {
+    id: "bracelet_aurelia",
+    name: "Aurelia Bangle",
+    category: "bracelets",
+    price: "$1,100",
+    description: "A sculpted gold bangle, worn a touch loose on the wrist.",
+    modelPath: "/models/bracelets/bracelet (1).glb",
+    arEnabled: true,
+    image: "/images/bracelet1.png",
+    preserveMaterials: true,
+    braceletFit: { loose: 1.15 },
   }
 ];

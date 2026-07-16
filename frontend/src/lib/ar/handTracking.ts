@@ -26,12 +26,20 @@ export class HandTracker {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
         runningMode: "VIDEO",
         numHands: 1,
+        // Defaults (0.5) hallucinate "hands" in background clutter — the
+        // jewelry then tracks curtains. Demand real confidence.
+        minHandDetectionConfidence: 0.7,
+        minHandPresenceConfidence: 0.7,
+        minTrackingConfidence: 0.6,
       });
     } catch {
       this._landmarker = await HandLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
         runningMode: "VIDEO",
         numHands: 1,
+        minHandDetectionConfidence: 0.7,
+        minHandPresenceConfidence: 0.7,
+        minTrackingConfidence: 0.6,
       });
     }
     this._ready = true;

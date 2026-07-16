@@ -11,6 +11,7 @@ import { BodyFitSession } from '@/lib/ar/bodyFit';
 import { EarringsSystem } from '@/lib/ar/earrings';
 import { NecklaceSystem } from '@/lib/ar/necklaces';
 import { RingSystem } from '@/lib/ar/rings';
+import { BraceletSystem } from '@/lib/ar/bracelets';
 import { estimateHeadPose } from '@/lib/ar/headPose';
 import { EarAnchor } from '@/lib/ar/earAnchor';
 import { Product, PRODUCTS } from '@/data/products';
@@ -151,6 +152,26 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       window.addEventListener('keydown', onKey);
       return () => window.removeEventListener('keydown', onKey);
     }
+    if (activeProduct.category === 'rings') {
+      const onKey = (e: KeyboardEvent) => {
+        const fit = ringsRef.current?.getFit();
+        if (!fit) return;
+        const step = 0.05 * (e.shiftKey ? 4 : 1);
+        let handled = true;
+        switch (e.key.toLowerCase()) {
+          case 'z': fit.sizeCm = Math.max(0.4, fit.sizeCm - step); break; // smaller
+          case 'x': fit.sizeCm += step; break;                            // bigger
+          case 'w': fit.alongT = Math.max(0, fit.alongT - 0.03); break;   // toward knuckle
+          case 's': fit.alongT = Math.min(1, fit.alongT + 0.03); break;   // toward joint
+          case 'r': fit.liftCm += step; break; // lift off the skin (toward camera)
+          case 'f': fit.liftCm -= step; break; // seat into the finger
+          default: handled = false;
+        }
+        if (handled) { e.preventDefault(); setCalibTick(t => t + 1); }
+      };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+    }
   }, [activeProduct, calibEar]);
 
   const requestRef  = useRef<number | null>(null);
@@ -158,6 +179,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   const earringsRef = useRef<EarringsSystem | null>(null);
   const necklacesRef= useRef<NecklaceSystem | null>(null);
   const ringsRef    = useRef<RingSystem | null>(null);
+  const braceletsRef= useRef<BraceletSystem | null>(null);
   const streamRef   = useRef<MediaStream | null>(null);
   const ambientRef  = useRef<THREE.AmbientLight | null>(null);
   const keyRef      = useRef<THREE.DirectionalLight | null>(null);
@@ -247,6 +269,9 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         // preserveDrawingBuffer: the "Save Look" snapshot composites this
         // canvas after the frame renders.
         renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+        // Rings/bracelets clip their far half with a per-frame plane (the
+        // production wristwear technique — render only the front portion).
+        renderer.localClippingEnabled = true;
         // Cap DPR at 2 — 3x phone displays would otherwise render 9× the pixels.
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.setClearColor(0x000000, 0);
@@ -275,11 +300,13 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         window.addEventListener('orientationchange', resizeRenderer);
         window.addEventListener('keydown', onFovKey);
 
+        // Rings AND bracelets track the HAND; everything else tracks the
+        // face. The trackers share one interface (init/ready/detect/dispose).
         const isRing = activeProduct.category === 'rings';
-        setLoadingMsg(isRing ? 'Loading Hand AI Models...' : 'Loading Face AI Models...');
-        // Rings track the HAND; everything else tracks the face. The two
-        // trackers share the same interface (init/ready/detect/dispose).
-        const tracker: any = isRing ? new HandTracker() : new FaceTracker();
+        const isBracelet = activeProduct.category === 'bracelets';
+        const isHand = isRing || isBracelet;
+        setLoadingMsg(isHand ? 'Loading Hand AI Models...' : 'Loading Face AI Models...');
+        const tracker: any = isHand ? new HandTracker() : new FaceTracker();
         await tracker.init();
 
         if (!active) { tracker.dispose(); return; }
@@ -290,14 +317,17 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         earringsRef.current  = new EarringsSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
         necklacesRef.current = new NecklaceSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
         ringsRef.current     = new RingSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
+        braceletsRef.current = new BraceletSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
 
         setLoadingMsg('Loading 3D Product...');
         earringsRef.current.setVisible(activeProduct.category === 'earrings');
         necklacesRef.current.setVisible(activeProduct.category === 'necklaces');
-        ringsRef.current.setVisible(false); // shown when a hand is detected
+        ringsRef.current.setVisible(false);     // shown when a hand is detected
+        braceletsRef.current.setVisible(false); // shown when a hand is detected
         if (activeProduct.category === 'earrings') await earringsRef.current.loadModel(activeProduct.modelPath, { singleEarring: activeProduct.pair === true, preserveMaterials: activeProduct.preserveMaterials === true, anchor: activeProduct.earAnchor, dangle: activeProduct.dangle, fit: activeProduct.arFit, materials: activeProduct.arMaterials, skinPenetration: activeProduct.skinPenetration, contactShadow: activeProduct.contactShadow, type: activeProduct.arType, fixedNodes: activeProduct.fixedNodes, pairMirror: activeProduct.pairMirror });
         else if (activeProduct.category === 'necklaces') await necklacesRef.current.loadModel(activeProduct.modelPath, { anchor: activeProduct.necklaceAnchor, scale: activeProduct.arFit?.scale, rotationFix: activeProduct.arFit?.rotationDeg, preserveMaterials: activeProduct.preserveMaterials === true, style: activeProduct.necklaceStyle, stripNodes: activeProduct.necklaceStrip } as any);
         else if (activeProduct.category === 'rings') await ringsRef.current.loadModel(activeProduct.modelPath, { fit: activeProduct.ringFit, scale: activeProduct.arFit?.scale, rotationFix: activeProduct.arFit?.rotationDeg, preserveMaterials: activeProduct.preserveMaterials === true } as any);
+        else if (activeProduct.category === 'bracelets') await braceletsRef.current.loadModel(activeProduct.modelPath, { fit: activeProduct.braceletFit, scale: activeProduct.arFit?.scale, rotationFix: activeProduct.arFit?.rotationDeg, stripNodes: activeProduct.necklaceStrip, preserveMaterials: activeProduct.preserveMaterials === true } as any);
         setLoadingMsg('');
 
         let lastNow = performance.now(), lastVideoTime = -1, lastDetectionMs = 0, lastDet: any = null, frameCount = 0, trackingLostMs = 0;
@@ -407,6 +437,9 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               if (isRing) {
                 ringsRef.current?.setVisible(true);
                 ringsRef.current?.update({ hand: det, view, dtSeconds });
+              } else if (isBracelet) {
+                braceletsRef.current?.setVisible(true);
+                braceletsRef.current?.update({ hand: det, view, dtSeconds });
               }
               // User guidance: when the face is off-centre, moving fast, or
               // an ear is covered, HIDE the jewelry 
@@ -451,9 +484,10 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               trackingLostMs += dtSeconds * 1000;
               earringsRef.current?.applyPresence(false, dtSeconds, trackingLostMs);
               necklacesRef.current?.setVisible(false);
-              if (isRing) {
+              if (isHand) {
                 ringsRef.current?.setVisible(false);
-                const handGuide = 'Show your hand to the camera';
+                braceletsRef.current?.setVisible(false);
+                const handGuide = isBracelet ? 'Show your wrist to the camera' : 'Show your hand to the camera';
                 if (trackingLostMs > 800 && lastGuide !== handGuide) { lastGuide = handGuide; setGuideMsg(handGuide); }
               } else if (lastGuide) { lastGuide = ''; setGuideMsg(''); }
             }
@@ -479,6 +513,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       earringsRef.current?.dispose();
       necklacesRef.current?.dispose();
       ringsRef.current?.dispose();
+      braceletsRef.current?.dispose();
       if (renderer) renderer.dispose();
     };
   }, [activeProduct]);
@@ -812,6 +847,29 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               <span>neck w&nbsp; G/H : {anchor ? `${(anchor.occRxCm ?? 5).toFixed(1)} cm` : '—'}</span>
               <span>neck d&nbsp; J/K : {anchor ? `${(anchor.occRzCm ?? 5.5).toFixed(1)} cm` : '—'}</span>
               <span style={{ opacity: 0.5 }}>B show neck · Shift ×4 · [ ] FOV</span>
+            </div>
+          );
+        })()}
+
+        {activeProduct.category === 'rings' && (() => {
+          const fit = ringsRef.current?.getFit();
+          return (
+            <div
+              className="absolute top-5 right-5 z-20 flex flex-col gap-1.5"
+              style={{
+                background: '#ffffff', border: '1px solid var(--cream-border)',
+                boxShadow: '0 8px 24px rgba(60,50,35,0.10)', borderRadius: '12px',
+                padding: '12px 16px', fontFamily: 'monospace', fontSize: '11px',
+                color: 'var(--cream-text)', lineHeight: 1.5,
+              }}
+            >
+              <span style={{ color: 'var(--gold-bright)', letterSpacing: '0.12em' }}>
+                RING CALIBRATION · {activeProduct.name.toUpperCase()}
+              </span>
+              <span>size&nbsp;&nbsp; Z\X : {fit ? `${fit.sizeCm.toFixed(2)}×` : '—'}</span>
+              <span>along W\S : {fit ? fit.alongT.toFixed(2) : '—'}</span>
+              <span>lift&nbsp;&nbsp; R\F : {fit ? `${fit.liftCm.toFixed(2)} cm` : '—'}</span>
+              <span style={{ opacity: 0.5 }}>Shift ×4 step</span>
             </div>
           );
         })()}
