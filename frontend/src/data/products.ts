@@ -14,7 +14,8 @@ export interface Product {
   pairMirror?: 'flipX' | 'rotateY';
   /** Render the GLB's authored materials exactly as-is */
   preserveMaterials?: boolean;
-  /** Per-model ear-anchor calibration (canonical cm).  */
+  /** How this piece hangs off the lobe (canonical cm), not where the lobe is.
+      Keep symmetric — the engine mirrors it. */
   earAnchor?: {
     userRight: { lateral: number; down: number; back: number };
     userLeft: { lateral: number; down: number; back: number };
@@ -117,9 +118,10 @@ export const PRODUCTS: Product[] = [
     dangle: { stiffness: 120, damping: 18, maxSwingDeg: 5, response: 0.003, pivotDrop: 0.3, accelDeadZone: 80 },
     skinPenetration: 0.5,
 
+    // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
-      userRight: { lateral: 0.1, down: 0.3, back: 0.4 },
-      userLeft:  { lateral: 1.2, down: -0.3, back: 0.4 }
+      userRight: { lateral: 0, down: 0, back: 0 },
+      userLeft:  { lateral: 0, down: 0, back: 0 }
     }
   },
   {
@@ -138,11 +140,10 @@ export const PRODUCTS: Product[] = [
     arType: 'hoop',       // rigid loop, full yaw-follow, no swing physics
     arFit: { rotationDeg: [0, 0, 0], scale: 1.2 },
     skinPenetration: 0.5,
-    // User-calibrated under the old estimator, translated by the per-side
-    // estimator delta measured on Astraea — verify on camera.
+    // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
-      userRight: { lateral: 1.1, down: -1.9, back: 1.4 },
-      userLeft:  { lateral: 1.2, down: -1.9, back: 1.5 }
+      userRight: { lateral: 0, down: 0, back: 0 },
+      userLeft:  { lateral: 0, down: 0, back: 0 }
     }
   },
   {
@@ -158,11 +159,10 @@ export const PRODUCTS: Product[] = [
     arType: 'stud',       // flat, rigid to the lobe, no physics at all
     skinPenetration: 1.5, // post fully hidden, gem sits flush on the lobe
     contactShadow: 0.5,   // stud presses flat → wider contact shadow
-    // User-calibrated under the old estimator, translated by the per-side
-    // estimator delta measured on Astraea — verify on camera.
+    // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
-      userRight: { lateral: 0.9, down: -2.4, back: 0.0 },
-      userLeft:  { lateral: 0.4, down: -2.8, back: 0.7 }
+      userRight: { lateral: 0, down: 0, back: 0 },
+      userLeft:  { lateral: 0, down: 0, back: 0 }
     },
     
     arMaterials: [
@@ -189,9 +189,10 @@ export const PRODUCTS: Product[] = [
     // explicit zeros skip the engine's default tilt, which is what had it
     // facing/flipping wrong. ([180,…] rendered it exactly upside down.)
     arFit: { rotationDeg: [0, 0, 0] },
+    // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
-      userRight: { lateral: 0.1, down: 0.3, back: 0.4 },
-      userLeft:  { lateral: 1.2, down: -0.3, back: 0.4 }
+      userRight: { lateral: 0, down: 0, back: 0 },
+      userLeft:  { lateral: 0, down: 0, back: 0 }
     }
   },
   {
@@ -211,9 +212,10 @@ export const PRODUCTS: Product[] = [
     // Single-earring GLB authored ALREADY hanging (long axis Y, hook at top,
     // flat face to camera) — explicit zeros skip the engine's default tilt.
     arFit: { rotationDeg: [0, 0, 0], scale: 1.6 },
+    // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
-      userRight: { lateral: 0.1, down: 0.3, back: 0.4 },
-      userLeft:  { lateral: 1.2, down: -0.3, back: 0.4 }
+      userRight: { lateral: 0, down: 0, back: 0 },
+      userLeft:  { lateral: 0, down: 0, back: 0 }
     }
   },
   {

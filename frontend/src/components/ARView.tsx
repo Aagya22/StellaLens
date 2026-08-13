@@ -14,6 +14,7 @@ import { RingSystem } from '@/lib/ar/rings';
 import { BraceletSystem } from '@/lib/ar/bracelets';
 import { estimateHeadPose } from '@/lib/ar/headPose';
 import { EarAnchor } from '@/lib/ar/earAnchor';
+import { hasUserLobes } from '@/lib/ar/lobeModel';
 import { Product, PRODUCTS } from '@/data/products';
 
 interface ARViewProps {
@@ -85,6 +86,32 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   const [calibEar, setCalibEar] = useState<'userRight' | 'userLeft'>('userRight');
   const [, setCalibTick] = useState(0);
 
+  /* Two-tap earlobe calibration. Step 0 = off, 1 = waiting for their LEFT
+     lobe, 2 = their RIGHT. The ref is what the pointer handler reads; the
+     state only drives the prompt. */
+  const calibStepRef = useRef(0);
+  const [calibStep, setCalibStep] = useState(0);
+  const [calibHint, setCalibHint] = useState('');
+  const [lobesTuned, setLobesTuned] = useState(false);
+  useEffect(() => { setLobesTuned(hasUserLobes()); }, []);
+
+  const startLobeCalibration = () => {
+    calibStepRef.current = 1;
+    setCalibStep(1);
+    setCalibHint('');
+  };
+  const cancelLobeCalibration = () => {
+    calibStepRef.current = 0;
+    setCalibStep(0);
+    setCalibHint('');
+  };
+  const resetLobeCalibration = () => {
+    earringsRef.current?.resetLobes();
+    cancelLobeCalibration();
+    setLobesTuned(false);
+  };
+
+
   useEffect(() => {
     if (activeProduct.category === 'earrings') {
       const onKey = (e: KeyboardEvent) => {
@@ -106,6 +133,10 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         if (handled) {
           e.preventDefault();
           setCalibTick(t => t + 1);
+          console.info(
+            `[AR] ${activeProduct.name} earAnchor.${calibEar} —` +
+            ` lateral ${o.lateral.toFixed(1)} · down ${o.down.toFixed(1)} · back ${o.back.toFixed(1)}`
+          );
         }
       };
       window.addEventListener('keydown', onKey);
@@ -205,6 +236,46 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
     const view = { stageW: 1, stageH: 1, videoW: 1, videoH: 1, cover: { scale: 1, offsetX: 0, offsetY: 0 } };
 
+    /* Lives inside the AR effect because it needs the live `camera` and
+       cover-fit. A tap is walked back through everything the stage does to the
+       render buffer: the CSS mirror + zoom, then the object-cover fit. */
+    const onStagePointer = (e: PointerEvent) => {
+      const step = calibStepRef.current;
+      if (!step || !camera || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      if (px < 0 || py < 0 || px > rect.width || py > rect.height) return;
+      // Undo `scaleX(-1) scale(CAMERA_ZOOM)`, which is applied about the centre.
+      const lx = -(px - rect.width / 2) / CAMERA_ZOOM + rect.width / 2;
+      const ly = (py - rect.height / 2) / CAMERA_ZOOM + rect.height / 2;
+      // Undo object-cover, landing in render-buffer pixels.
+      const bx = (lx - view.cover.offsetX) / view.cover.scale;
+      const by = (ly - view.cover.offsetY) / view.cover.scale;
+      const ndcX = (bx / view.videoW) * 2 - 1;
+      const ndcY = -((by / view.videoH) * 2 - 1);
+      // The view is mirrored, so the user's LEFT ear is on the display's left,
+      // which is +x (screenRight) in the unmirrored frame the engine renders.
+      const side = step === 1 ? 'screenRight' : 'screenLeft';
+      const saved = earringsRef.current?.calibrateLobeFromTap({ side, ndcX, ndcY, camera });
+      if (!saved) {
+        setCalibHint('Hold still — I need to see your face.');
+        return;
+      }
+      setCalibHint('');
+      if (step === 1) {
+        calibStepRef.current = 2;
+        setCalibStep(2);
+      } else {
+        calibStepRef.current = 0;
+        setCalibStep(0);
+        setLobesTuned(true);
+        // Read these off a few faces to retune CANONICAL_LOBE in lobeModel.ts.
+        console.info('[AR] lobes calibrated (head-local cm):', JSON.stringify(saved));
+      }
+    };
+
+
     const updateView = () => {
       if (!containerRef.current || !videoRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
@@ -299,6 +370,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         window.addEventListener('resize', resizeRenderer);
         window.addEventListener('orientationchange', resizeRenderer);
         window.addEventListener('keydown', onFovKey);
+        window.addEventListener('pointerdown', onStagePointer);
 
         // Rings AND bracelets track the HAND; everything else tracks the
         // face. The trackers share one interface (init/ready/detect/dispose).
@@ -507,6 +579,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       window.removeEventListener('resize', resizeRenderer);
       window.removeEventListener('orientationchange', resizeRenderer);
       window.removeEventListener('keydown', onFovKey);
+      window.removeEventListener('pointerdown', onStagePointer);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       trackerRef.current?.dispose();
@@ -660,6 +733,47 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           />
         )}
 
+        {/* ── Two-tap earlobe calibration prompt ── */}
+        {calibStep > 0 && (
+          <div
+            className="absolute inset-x-0 bottom-0 z-30 flex flex-col items-center gap-2 pointer-events-none"
+            style={{ padding: '18px 16px 22px' }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-jost), sans-serif",
+                fontSize: '13px', letterSpacing: '0.14em', textTransform: 'uppercase',
+                color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.7)',
+              }}
+            >
+              {/* Mirrored view — "your left" is on the left of the screen. */}
+              Tap your {calibStep === 1 ? 'LEFT' : 'RIGHT'} earlobe
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-jost), sans-serif",
+                fontSize: '11px', letterSpacing: '0.1em',
+                color: calibHint ? '#ffb4a2' : 'rgba(255,255,255,0.7)',
+                textShadow: '0 1px 6px rgba(0,0,0,0.7)',
+              }}
+            >
+              {calibHint || `Step ${calibStep} of 2 — face the camera`}
+            </span>
+            <button
+              onClick={cancelLobeCalibration}
+              className="cursor-pointer pointer-events-auto"
+              style={{
+                marginTop: '4px', background: 'rgba(0,0,0,0.45)', color: '#fff',
+                border: '1px solid rgba(255,255,255,0.35)', borderRadius: '999px',
+                padding: '7px 18px', fontFamily: "var(--font-jost), sans-serif",
+                fontSize: '10px', letterSpacing: '0.18em', textTransform: 'uppercase',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
         {/* ── Live guidance: shown while the jewelry is hidden on purpose ── */}
         {guideMsg && !loadingMsg && (
           <div
@@ -782,37 +896,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
         {/* ── TEMPORARY calibration readouts — outside the camera card,
             in the stage's white space (dev tool, removed at ship) ── */}
-        {activeProduct.category === 'earrings' && (() => {
-          const anchor = earringsRef.current?.getAnchor();
-          const o = anchor?.[calibEar];
-          return (
-            <div
-              className="absolute top-5 right-5 z-20 flex flex-col gap-1.5"
-              style={{
-                background: '#ffffff',
-                border: '1px solid var(--cream-border)',
-                boxShadow: '0 8px 24px rgba(60,50,35,0.10)',
-                borderRadius: '12px',
-                padding: '12px 16px',
-                fontFamily: 'monospace',
-                fontSize: '11px',
-                color: 'var(--cream-text)',
-                lineHeight: 1.5,
-              }}
-            >
-              <span style={{ color: 'var(--gold-bright)', letterSpacing: '0.12em' }}>
-                CALIBRATION · {activeProduct.name.toUpperCase()}
-              </span>
-              <span style={{ color: 'var(--gold-bright)' }}>
-                {calibEar === 'userRight' ? 'YOUR RIGHT EAR' : 'YOUR LEFT EAR'}
-              </span>
-              <span>lateral A/D : {o ? `${o.lateral.toFixed(1)} cm` : '—'}</span>
-              <span>down&nbsp;&nbsp;&nbsp; W/S : {o ? `${o.down.toFixed(1)} cm` : '—'}</span>
-              <span>back&nbsp;&nbsp;&nbsp; R/F : {o ? `${o.back.toFixed(1)} cm` : '—'}</span>
-              <span style={{ opacity: 0.5 }}>T switch ear · Shift ×4 step</span>
-            </div>
-          );
-        })()}
         {activeProduct.category === 'necklaces' && (() => {
           const anchor = necklacesRef.current?.getAnchor();
           const o = anchor?.pivotOffset;
@@ -949,6 +1032,24 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         <div className="flex-1" />
 
         <div className="px-8 pb-8 flex flex-col gap-3">
+          {activeProduct.category === 'earrings' && (
+            <button
+              onClick={lobesTuned ? resetLobeCalibration : startLobeCalibration}
+              disabled={calibStep > 0}
+              className="cursor-pointer"
+              style={{
+                background: 'transparent', color: 'var(--gold-bright)',
+                border: '1px solid var(--gold-fade)',
+                borderRadius: '999px', padding: '14px 20px',
+                fontFamily: "var(--font-jost), sans-serif",
+                fontSize: '11px', letterSpacing: '0.22em', textTransform: 'uppercase',
+                opacity: calibStep > 0 ? 0.45 : 1,
+                transition: 'all 0.2s',
+              }}
+            >
+              {lobesTuned ? 'Reset Ear Fit' : 'Fit To My Ears'}
+            </button>
+          )}
           <button
             onClick={handleOrder}
             className="cursor-pointer"
