@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Environment — never commit real credentials.
+# .env.example files are the tracked template.
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local tool state
+.claude/settings.local.json

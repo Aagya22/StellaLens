@@ -1,62 +1,72 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+import { env, corsOrigins, isProd } from './config/env';
+import { connectDatabase, disconnectDatabase, isDatabaseReady } from './config/db';
+import { ordersRouter } from './routes/orders';
+import { errorHandler, notFound } from './middleware/errorHandler';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/stellalens';
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+app.set('trust proxy', 1); // so req.ip is the client, not the proxy
+app.use(
+  cors({
+    // An allow-list, not `*`: this API takes names, phone numbers and
+    // addresses, so any origin being able to call it is not acceptable.
+    origin(origin, callback) {
+      // No Origin header = curl, health checks, server-to-server.
+      if (!origin) return callback(null, true);
+      if (corsOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`Origin ${origin} is not allowed`));
+    },
+  })
+);
+app.use(express.json({ limit: '100kb' }));
 
-// Basic sanity check route
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'StellaLens Celestial Backend is running' });
 });
 
-// Post Bespoke Order placeholder endpoint
-app.post('/api/orders', async (req: Request, res: Response) => {
-  try {
-    const { name, email, phone, address, productId, productName, price, customizations } = req.body;
-    
-    // Log the received custom order configuration
-    console.log('Bespoke order received:', {
-      name,
-      email,
-      phone,
-      address,
-      productId,
-      productName,
-      price,
-      customizations
-    });
-
-    res.status(201).json({
-      message: 'Bespoke order captured successfully',
-      data: { name, email, productName, price, customizations }
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to process custom order request' });
-  }
+app.get('/health', (_req: Request, res: Response) => {
+  const dbReady = isDatabaseReady();
+  res.status(dbReady ? 200 : 503).json({
+    status: dbReady ? 'ok' : 'degraded',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    uptimeSeconds: Math.round(process.uptime()),
+  });
 });
 
-// Connect to MongoDB & Start Server
-mongoose.connect(MONGODB_URI)
-  .then(() => {
-    console.log('Successfully connected to MongoDB.');
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Database connection error:', err);
-    // Fallback: Start the server anyway in dev mode
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT} (without Database)`);
-    });
+app.use('/api/orders', ordersRouter);
+
+app.use(notFound);
+app.use(errorHandler);
+
+async function start() {
+  try {
+    await connectDatabase();
+    console.info('[db] connected');
+  } catch (err) {
+    // Refuse to start rather than accept orders with nowhere to put them.
+    console.error('[db] could not connect:', (err as Error).message);
+    process.exit(1);
+  }
+
+  const server = app.listen(env.PORT, () => {
+    console.info(`[server] listening on port ${env.PORT} (${env.NODE_ENV})`);
+    if (!isProd) console.info(`[server] allowed origins: ${corsOrigins.join(', ')}`);
   });
+
+  const shutdown = async (signal: string) => {
+    console.info(`[server] ${signal} — shutting down`);
+    server.close(async () => {
+      await disconnectDatabase();
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+}
+
+void start();

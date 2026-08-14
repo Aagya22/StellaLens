@@ -299,7 +299,13 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     const resizeRenderer = () => {
       if (!renderer || !camera || !containerRef.current) return;
       updateView();
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      // The buffer only needs enough pixels to cover the STAGE, not the
+      // camera's full resolution. cover.scale is how far the frame is scaled
+      // to fill the card, so that (times the screen's pixel density and the
+      // CSS zoom) is the real requirement. A 1080p webcam in a ~450px card was
+      // drawing several times more pixels than could ever be shown.
+      const needed = view.cover.scale * (window.devicePixelRatio || 1) * CAMERA_ZOOM;
+      renderer.setPixelRatio(THREE.MathUtils.clamp(needed, 0.75, 2));
       // Render at the video's own resolution/aspect; the canvas is CSS
       // object-cover so it crops identically to the video feed.
       renderer.setSize(view.videoW, view.videoH, false);

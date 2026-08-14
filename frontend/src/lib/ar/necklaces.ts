@@ -121,7 +121,10 @@ export class NecklaceSystem {
     // Heavier smoothing than earrings ON PURPOSE: a necklace rests on the
     // body — stillness reads as realism, and its anchor (spine pivot) truly
     // is near-static, so low cutoffs cost almost no tracking accuracy.
-    this._pos = new OneEuroVec3({ minCutoff: 0.5, beta: 0.08 });
+    // beta stays higher than that logic implies: the low cutoff is what keeps
+    // it still, while beta is what lets it keep up during a head turn. At 0.08
+    // it couldn't, and the necklace visibly trailed and then caught up.
+    this._pos = new OneEuroVec3({ minCutoff: 0.5, beta: 0.3 });
     this._quat = new OneEuroQuat({ minCutoff: 0.6, beta: 0.25 });
     this._fade = 1;
     this._anchor = structuredClone(NECKLACE_ANCHOR);

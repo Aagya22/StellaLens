@@ -233,7 +233,7 @@ export const PRODUCTS: Product[] = [
     // forwardCm 0 = wraps the neck. drop/forward/occluder divided by the
     // calibrating body's 0.796 scale, so these are now body-neutral.
     necklaceAnchor: {
-      pivotOffset: { x: 0.2, z: -4.9 }, dropCm: 4.5,
+      pivotOffset: { x: -0.3, z: -4.9 }, dropCm: 4.7,
       widthCm: 17, lengthCm: 17.3, forwardCm: 0,
       occRxCm: 6.2, occRzCm: 4.4,
     },
