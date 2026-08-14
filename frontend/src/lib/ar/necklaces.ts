@@ -25,16 +25,16 @@ import { dampHeadPoseQuaternion } from "./headPose";
       calibrations refused to repeat. */
 export const NECKLACE_ANCHOR = {
   pivotOffset: { x: 0, y: -8, z: -6 }, // cm, skull-local: top of the spine
-  dropCm: 7,          // pivot → chain centre, straight down in body frame
-  forwardCm: 6.5,     // spine axis → chest skin, toward the camera
+  dropCm: 5.6,        // pivot → chain centre, straight down in body frame
+  forwardCm: 5.2,     // spine axis → chest skin, toward the camera
   widthCm: 12,        // loop width (should match the neck), in cm
   lengthCm: 0,        // vertical size (loop + pendant drop); 0 = same as width
   pendantCm: 4,       // 'pendant' style: the GLB's real size (never stretched)
   // Occluder ellipse — matches the MODEL's wrap opening, not a fixed neck:
   // rigid GLBs are authored around their own bust, so this is per-product.
-  occRxCm: 5.0,       // occluder half-width (side reach)
-  occRzCm: 5.5,       // occluder half-depth (front/back reach)
-  occHCm: 13,         // occluder height
+  occRxCm: 4.0,       // occluder half-width (side reach)
+  occRzCm: 4.4,       // occluder half-depth (front/back reach)
+  occHCm: 10.3,       // occluder height
   yawFollow: 0.12,
   pitchFollow: 0.25,
   rollFollow: 0.3,

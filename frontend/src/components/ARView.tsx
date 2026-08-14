@@ -85,6 +85,11 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
      */
   const [calibEar, setCalibEar] = useState<'userRight' | 'userLeft'>('userRight');
   const [, setCalibTick] = useState(0);
+  /* Live body-fit state for the necklace readout — this used to be console
+     only, and could go silent entirely if the pose model never loaded. */
+  const [bodyFitInfo, setBodyFitInfo] = useState<
+    { status: string; cm: number | null; scale: number; samples: number; needed: number; baseline: number } | null
+  >(null);
 
   /* Two-tap earlobe calibration. Step 0 = off, 1 = waiting for their LEFT
      lobe, 2 = their RIGHT. The ref is what the pointer handler reads; the
@@ -408,9 +413,19 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         // Tier-2 body fit (necklaces): one-time shoulder measurement, then
         // the pose model shuts down and the face-only pipeline runs alone.
         let bodyFit: any = null; // BodyFitSession (its module is @ts-nocheck)
+        let bodyFitStatus = '';
+        const publishBodyFit = (s: any) => setBodyFitInfo({
+          status: s.status, cm: s.noseShoulderCm, scale: s.scale,
+          samples: s.samples, needed: s.samplesNeeded, baseline: s.baselineCm,
+        });
         if (activeProduct.category === 'necklaces') {
           bodyFit = new BodyFitSession();
-          bodyFit.init().catch((e: any) => { console.warn('[AR] body fit unavailable:', e?.message ?? e); bodyFit = null; });
+          publishBodyFit(bodyFit);
+          bodyFit.init().catch((e: any) => {
+            console.warn('[AR] body fit unavailable:', e?.message ?? e);
+            setBodyFitInfo({ status: 'unavailable', cm: null, scale: 1, samples: 0, needed: 0, baseline: 0 });
+            bodyFit = null;
+          });
         }
         const leftEarAnchor = EarAnchor.defaultLeft(), rightEarAnchor = EarAnchor.defaultRight();
         // One small offscreen canvas (64×64) for ALL scene-lighting sampling —
@@ -434,8 +449,12 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             frameCount++;
             if (bodyFit && bodyFit.done === false) {
               bodyFit.sample(video, now);
+              // Repaint only when something actually changes, not per frame.
+              const tag = `${bodyFit.status}:${bodyFit.samples}`;
+              if (tag !== bodyFitStatus) { bodyFitStatus = tag; publishBodyFit(bodyFit); }
               if (bodyFit.done) {
                 necklacesRef.current?.setBodyScale(bodyFit.scale);
+                publishBodyFit(bodyFit);
                 bodyFit = null;
               }
             }
@@ -929,6 +948,23 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               <span>fwd&nbsp;&nbsp;&nbsp;&nbsp; C/V : {anchor ? `${anchor.forwardCm.toFixed(1)} cm` : '—'}</span>
               <span>neck w&nbsp; G/H : {anchor ? `${(anchor.occRxCm ?? 5).toFixed(1)} cm` : '—'}</span>
               <span>neck d&nbsp; J/K : {anchor ? `${(anchor.occRzCm ?? 5.5).toFixed(1)} cm` : '—'}</span>
+              {(() => {
+                const bf = bodyFitInfo;
+                if (!bf) return <span style={{ opacity: 0.5 }}>body&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : —</span>;
+                const ok = bf.status === 'ok';
+                const label =
+                  bf.status === 'loading' ? 'loading pose model…' :
+                  bf.status === 'measuring' ? `measuring… ${bf.samples}/${bf.needed}` :
+                  bf.status === 'no-shoulders' ? 'shoulders not seen · ×1.00' :
+                  bf.status === 'unavailable' ? 'pose model failed · ×1.00' :
+                  `${bf.cm?.toFixed(1)} cm → ×${bf.scale.toFixed(2)}`;
+                return (
+                  <>
+                    <span style={{ color: ok ? '#2e7d32' : '#b26a00' }}>body&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : {label}</span>
+                    {ok && <span style={{ opacity: 0.5 }}>baseline&nbsp; : {bf.baseline} cm</span>}
+                  </>
+                );
+              })()}
               <span style={{ opacity: 0.5 }}>B show neck · Shift ×4 · [ ] FOV</span>
             </div>
           );

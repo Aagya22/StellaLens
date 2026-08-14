@@ -7,11 +7,16 @@ const WASM_BASE_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 
 
-const BASELINE_NOSE_TO_SHOULDER_CM = 23; // ← replace with the calibrating user's own console value
+/* The calibrating user's own measurement, so their fit is ×1.00 and the tuned
+   numbers in products.ts are true canonical values rather than their body's. */
+const BASELINE_NOSE_TO_SHOULDER_CM = 18.3;
 const CANONICAL_INTEROCULAR_CM = 9.0;
 const SAMPLES_NEEDED = 24;
-const MAX_MS = 6000; // give up politely if shoulders never come into view
+const MAX_MS = 10000;      // give up politely if shoulders never come into view
+const LOAD_MAX_MS = 20000; // give up on the model download rather than hang
 const MIN_VISIBILITY = 0.7;
+
+const SAMPLE_INTERVAL_MS = 80;
 
 export class BodyFitSession {
   constructor() {
@@ -19,13 +24,28 @@ export class BodyFitSession {
     this._samples = [];
     this._done = false;
     this._startedMs = 0;
+    this._measureStartedMs = 0;
+    this._lastSampleMs = 0;
     this._lastTs = 0;
+    this._result = null;   // 'ok' | 'no-shoulders' | 'unavailable'
+    this._medianCm = null;
     this.scale = 1; // result: multiplier for dropCm / occluder dims
   }
 
   get done() {
     return this._done;
   }
+
+  /** 'loading' | 'measuring' | 'ok' | 'no-shoulders' | 'unavailable' */
+  get status() {
+    if (this._done) return this._result ?? "unavailable";
+    return this._landmarker ? "measuring" : "loading";
+  }
+
+  get samples() { return this._samples.length; }
+  get samplesNeeded() { return SAMPLES_NEEDED; }
+  get noseShoulderCm() { return this._medianCm; }
+  get baselineCm() { return BASELINE_NOSE_TO_SHOULDER_CM; }
 
   async init() {
     const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
@@ -47,13 +67,22 @@ export class BodyFitSession {
   /** Feed a video frame. Returns true while more samples are wanted. */
   sample(video, nowMs) {
     if (this._done) return false;
-    if (!this._landmarker) return true; // still initializing
-    if (!video || video.videoWidth === 0) return true;
+    // Clock starts on the first frame, NOT once the model has loaded — a
+    // download that never resolves used to sit here silently forever.
     if (!this._startedMs) this._startedMs = nowMs;
-    if (nowMs - this._startedMs > MAX_MS) {
+    if (!this._landmarker) {
+      if (nowMs - this._startedMs > LOAD_MAX_MS) this._finish("unavailable");
+      return true;
+    }
+    if (!video || video.videoWidth === 0) return true;
+    // Measuring gets its own budget, so a slow download doesn't eat it.
+    if (!this._measureStartedMs) this._measureStartedMs = nowMs;
+    if (nowMs - this._measureStartedMs > MAX_MS) {
       this._finish("timeout");
       return false;
     }
+    if (nowMs - this._lastSampleMs < SAMPLE_INTERVAL_MS) return true;
+    this._lastSampleMs = nowMs;
     const ts = Math.max(nowMs, this._lastTs + 1);
     this._lastTs = ts;
     let res;
@@ -87,13 +116,15 @@ export class BodyFitSession {
     if (this._samples.length >= 8) {
       // Median — robust to the odd junk frame.
       const s = [...this._samples].sort((a, b) => a - b);
-      const med = s[Math.floor(s.length / 2)];
-      this.scale = Math.min(1.3, Math.max(0.75, med / BASELINE_NOSE_TO_SHOULDER_CM));
+      this._medianCm = s[Math.floor(s.length / 2)];
+      this.scale = Math.min(1.3, Math.max(0.75, this._medianCm / BASELINE_NOSE_TO_SHOULDER_CM));
+      this._result = "ok";
       console.info(
-        `[AR] body fit: nose→shoulder ${med.toFixed(1)} cm → necklace fit ×${this.scale.toFixed(2)} (baseline ${BASELINE_NOSE_TO_SHOULDER_CM} cm)`
+        `[AR] body fit: nose→shoulder ${this._medianCm.toFixed(1)} cm → necklace fit ×${this.scale.toFixed(2)} (baseline ${BASELINE_NOSE_TO_SHOULDER_CM} cm)`
       );
     } else {
-      console.info(`[AR] body fit: shoulders not visible enough (${reason}) — default fit`);
+      this._result = reason === "unavailable" ? "unavailable" : "no-shoulders";
+      console.info(`[AR] body fit: ${this._result} (${reason}) — default fit ×1.00`);
     }
     this.dispose();
   }

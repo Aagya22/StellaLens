@@ -229,13 +229,13 @@ export const PRODUCTS: Product[] = [
     image: "/images/necklace1.png",
  
     necklaceStrip: ['badan', 'shirley'],
-    // Final on-camera calibration 2026-07-15 (incl. per-model occluder
-    // ellipse — the collar's wrap opening, wider than a bare neck).
     metalOptions: true,
+    // forwardCm 0 = wraps the neck. drop/forward/occluder divided by the
+    // calibrating body's 0.796 scale, so these are now body-neutral.
     necklaceAnchor: {
-      pivotOffset: { x: -0.3, z: -6 }, dropCm: 3.6,
-      widthCm: 17, lengthCm: 17.3, forwardCm: 3.8,
-      occRxCm: 7.6, occRzCm: 5.5,
+      pivotOffset: { x: 0.2, z: -4.9 }, dropCm: 4.5,
+      widthCm: 17, lengthCm: 17.3, forwardCm: 0,
+      occRxCm: 6.2, occRzCm: 4.4,
     },
   },
   {
@@ -251,9 +251,9 @@ export const PRODUCTS: Product[] = [
     //  2026-07-15.
     metalOptions: true,
     necklaceAnchor: {
-      pivotOffset: { x: -0.1, z: -5.2 }, dropCm: 6.0,
-      widthCm: 15.3, forwardCm: 6.5,
-      occRxCm: 12.0, occRzCm: 5.5,
+      pivotOffset: { x: -0.1, z: -5.2 }, dropCm: 4.8,
+      widthCm: 15.3, forwardCm: 5.2,
+      occRxCm: 9.5, occRzCm: 4.4,
     },
   },
   {
@@ -270,9 +270,9 @@ export const PRODUCTS: Product[] = [
     // stripped at load so only the beads remain.
     necklaceStrip: ['shirley', 'polysurface1421'],
     necklaceAnchor: {
-      pivotOffset: { z: -6 }, dropCm: 4,
-      widthCm: 14, forwardCm: 2,
-      occRxCm: 7.0, occRzCm: 5.5,
+      pivotOffset: { x: 0.1, z: -4.0 }, dropCm: 5.4,
+      widthCm: 14, forwardCm: 1.6,
+      occRxCm: 5.7, occRzCm: 4.4,
     },
   },
   {
