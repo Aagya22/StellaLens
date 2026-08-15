@@ -1,7 +1,5 @@
-import { Schema, model, InferSchemaType, HydratedDocument } from 'mongoose';
+import { Schema, model, InferSchemaType, HydratedDocument, Types } from 'mongoose';
 
-/* Mirrors the AR view's customization panel. Optional throughout — a plain
-   piece with no options chosen is a perfectly valid order. */
 const customizationsSchema = new Schema(
   {
     topGem: { type: String, trim: true },
@@ -11,23 +9,54 @@ const customizationsSchema = new Schema(
   },
   { _id: false }
 );
+const orderItemSchema = new Schema(
+  {
+    productId: { type: String, required: true, trim: true },
+    productName: { type: String, required: true, trim: true },
+    unitPriceMinor: { type: Number, required: true, min: 0 },
+    quantity: { type: Number, required: true, min: 1 },
+    lineTotalMinor: { type: Number, required: true, min: 0 },
+    customizations: { type: customizationsSchema, default: {} },
+  },
+  { _id: false }
+);
+
+const shippingSchema = new Schema(
+  {
+    address: { type: String, required: true, trim: true, maxlength: 300 },
+    city: { type: String, required: true, trim: true, maxlength: 120 },
+    postalCode: { type: String, required: true, trim: true, maxlength: 20 },
+    country: { type: String, required: true, trim: true, maxlength: 120 },
+    notes: { type: String, trim: true, maxlength: 500 },
+  },
+  { _id: false }
+);
 
 const orderSchema = new Schema(
   {
-
     reference: { type: String, required: true, unique: true },
 
-    name: { type: String, required: true, trim: true, maxlength: 120 },
-    email: { type: String, required: true, trim: true, lowercase: true, maxlength: 200 },
-    phone: { type: String, required: true, trim: true, maxlength: 40 },
-    address: { type: String, required: true, trim: true, maxlength: 500 },
+    user: { type: Schema.Types.ObjectId, ref: 'User' },
 
-    productId: { type: String, required: true, trim: true },
-    productName: { type: String, required: true, trim: true },
+    customer: {
+      name: { type: String, required: true, trim: true, maxlength: 120 },
+      email: { type: String, required: true, trim: true, lowercase: true, maxlength: 200 },
+      phone: { type: String, required: true, trim: true, maxlength: 40 },
+    },
 
-    price: { type: String, required: true, trim: true },
+    shipping: { type: shippingSchema, required: true },
 
-    customizations: { type: customizationsSchema, default: {} },
+    items: {
+      type: [orderItemSchema],
+      required: true,
+      validate: [(v: unknown[]) => v.length > 0, 'An order needs at least one item'],
+    },
+    totals: {
+      subtotalMinor: { type: Number, required: true, min: 0 },
+      deliveryMinor: { type: Number, required: true, min: 0 },
+      totalMinor: { type: Number, required: true, min: 0 },
+      currency: { type: String, required: true, default: 'NPR' },
+    },
 
     status: {
       type: String,
@@ -38,9 +67,9 @@ const orderSchema = new Schema(
   { timestamps: true }
 );
 
-// Newest-first listing for whatever admin view comes later.
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ user: 1, createdAt: -1 });
 
 export type Order = InferSchemaType<typeof orderSchema>;
 export type OrderDocument = HydratedDocument<Order>;
@@ -53,3 +82,17 @@ export function generateReference(): string {
   const salt = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `SL-${stamp}-${salt}`;
 }
+
+/** What may be returned to the customer who placed it. */
+export function publicOrder(order: OrderDocument) {
+  return {
+    reference: order.reference,
+    status: order.status,
+    items: order.items,
+    shipping: order.shipping,
+    totals: order.totals,
+    createdAt: order.createdAt,
+  };
+}
+
+export type OrderUserRef = Types.ObjectId | undefined;

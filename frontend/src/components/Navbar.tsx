@@ -3,17 +3,17 @@
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 
-type Tab = 'home' | 'jewelry' | 'about';
+type Tab = 'home' | 'jewelry' | 'about' | 'checkout';
 
 interface NavbarProps {
   activeTab: Tab;
   goToTab: (tab: Tab) => void;
-  orderData: any;
-  setOrderData: (data: any) => void;
   onSignInClick: () => void;
+  onCartClick: () => void;
+  cartCount: number;
 }
 
-export default function Navbar({ activeTab, goToTab, orderData, setOrderData, onSignInClick }: NavbarProps) {
+export default function Navbar({ activeTab, goToTab, onSignInClick, onCartClick, cartCount }: NavbarProps) {
   const { user, loading, logout } = useAuth();
   return (
     <header
@@ -72,29 +72,26 @@ export default function Navbar({ activeTab, goToTab, orderData, setOrderData, on
 
         <div className="flex items-center gap-6 ml-auto">
           <button
-            className="cursor-pointer text-[var(--header-text)] hover:opacity-85 transition-opacity"
-            style={{ background: 'none', border: 'none', lineHeight: 0 }}
-            title="Search"
-          >
-            <svg width="19" height="19" viewBox="0 0 94 94" fill="currentColor">
-              <path d="M94,89.8L79,74.8c6.9-7.9,11.1-18.3,11.1-29.6C90.1,20.2,69.8,0,44.9,0S-0.2,20.2-0.2,45.2s20.3,45.2,45.1,45.2c11.4,0,21.7-4.2,29.7-11.2l15,15,4.4-4.4ZM44.9,84.2c-21.5,0-39-17.5-39-39s17.5-39,39-39,39,17.5,39,39-17.5,39-39,39Z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => {
-              if (orderData) {
-                setOrderData(orderData);
-              }
-            }}
+            onClick={onCartClick}
             className="cursor-pointer relative text-[var(--header-text)] hover:opacity-85 transition-opacity"
             style={{ background: 'none', border: 'none', lineHeight: 0 }}
-            title="Stock"
+            title="Bag"
           >
             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
             </svg>
-            {orderData && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--gold)' }} />
+            {cartCount > 0 && (
+              <span
+                className="absolute flex items-center justify-center"
+                style={{
+                  top: '-6px', right: '-8px', minWidth: '16px', height: '16px',
+                  padding: '0 4px', borderRadius: '999px', background: 'var(--gold)',
+                  color: '#fff', fontSize: '9px', lineHeight: 1,
+                  fontFamily: "var(--font-jost), sans-serif",
+                }}
+              >
+                {cartCount}
+              </span>
             )}
           </button>
           {/* Account. Nothing is rendered until the session check settles, so

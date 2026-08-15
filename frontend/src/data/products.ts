@@ -105,7 +105,7 @@ export const PRODUCTS: Product[] = [
     id: "earring_diamond",
     name: "Astraea Diamond Drops",
     category: "earrings",
-    price: "$1,250",
+    price: "Rs 1,250",
     description: "A brilliant-cut ruby stud above a tanzanite teardrop, ringed in pavé diamonds and set in 24k gold.",
     modelPath: "/models/earrings/astraea_diamond_drops.glb",
     arEnabled: true,
@@ -118,7 +118,6 @@ export const PRODUCTS: Product[] = [
     dangle: { stiffness: 120, damping: 18, maxSwingDeg: 5, response: 0.003, pivotDrop: 0.3, accelDeadZone: 80 },
     skinPenetration: 0.5,
 
-    // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
       userRight: { lateral: 0, down: 0, back: 0 },
       userLeft:  { lateral: 0, down: 0, back: 0 }
@@ -128,7 +127,7 @@ export const PRODUCTS: Product[] = [
     id: "earring_gold_hoop",
     name: "Lunette Golden Hoops",
     category: "earrings",
-    price: "$650",
+    price: "Rs 650",
     description: "Classic huggie hoops forged from solid 18k yellow gold, with a high-polish mirror finish and a comfort-fit clasp.",
     modelPath: "/models/earrings/gold_hoop_clean.glb",
     arEnabled: true,
@@ -150,7 +149,7 @@ export const PRODUCTS: Product[] = [
     id: "earring_selene",
     name: "Selene Studs",
     category: "earrings",
-    price: "$780",
+    price: "Rs 780",
     description: "Round studs in solid gold, sized to catch the light without the weight — the everyday pair.",
     modelPath: "/models/earrings/selene_studs.glb",
     arEnabled: true,
@@ -159,7 +158,6 @@ export const PRODUCTS: Product[] = [
     arType: 'stud',       // flat, rigid to the lobe, no physics at all
     skinPenetration: 1.5, // post fully hidden, gem sits flush on the lobe
     contactShadow: 0.5,   // stud presses flat → wider contact shadow
-    // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
       userRight: { lateral: 0, down: 0, back: 0 },
       userLeft:  { lateral: 0, down: 0, back: 0 }
@@ -174,7 +172,7 @@ export const PRODUCTS: Product[] = [
     id: "earring_anarkali",
     name: "Anarkali Drops",
     category: "earrings",
-    price: "$1,050",
+    price: "Rs 1,050",
     description: "Layered gold drops in the Anarkali tradition, finished by hand.",
     modelPath: "/models/earrings/anarkali_earring.glb",
     arEnabled: true,
@@ -185,9 +183,6 @@ export const PRODUCTS: Product[] = [
     arType: 'dangle',
     dangle: { pivotDrop: 0.3 },
     skinPenetration: 0.5,
-    // The GLB is authored ALREADY worn-upright (hoop up, dome + beads down);
-    // explicit zeros skip the engine's default tilt, which is what had it
-    // facing/flipping wrong. ([180,…] rendered it exactly upside down.)
     arFit: { rotationDeg: [0, 0, 0] },
     // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
@@ -199,7 +194,7 @@ export const PRODUCTS: Product[] = [
     id: "earring_raflesia",
     name: "Raflesia Two-Layer Drops",
     category: "earrings",
-    price: "$1,180",
+    price: "Rs 1,180",
     description: "A two-tier floral drop earring, blooming in solid gold.",
     modelPath: "/models/earrings/raflesia_single.glb",
     arEnabled: true,
@@ -209,8 +204,6 @@ export const PRODUCTS: Product[] = [
     arType: 'dangle',
     dangle: { pivotDrop: 0.3 },
     skinPenetration: 0.5,
-    // Single-earring GLB authored ALREADY hanging (long axis Y, hook at top,
-    // flat face to camera) — explicit zeros skip the engine's default tilt.
     arFit: { rotationDeg: [0, 0, 0], scale: 1.6 },
     // Zeroed — old values were tuned against the removed lobe estimator.
     earAnchor: {
@@ -222,7 +215,7 @@ export const PRODUCTS: Product[] = [
     id: "necklace_orlaith",
     name: "Orlaith Celestial Chain",
     category: "necklaces",
-    price: "$1,800",
+    price: "Rs 1,800",
     description: "A statement collar hand-carved in solid 22k yellow gold, weighted to rest exactly where it should on the neck.",
     modelPath: "/models/necklaces/orlaith_celestial_chain.glb",
     arEnabled: true,
@@ -230,8 +223,6 @@ export const PRODUCTS: Product[] = [
  
     necklaceStrip: ['badan', 'shirley'],
     metalOptions: true,
-    // forwardCm 0 = wraps the neck. drop/forward/occluder divided by the
-    // calibrating body's 0.796 scale, so these are now body-neutral.
     necklaceAnchor: {
       pivotOffset: { x: -0.3, z: -4.9 }, dropCm: 4.7,
       widthCm: 17, lengthCm: 17.3, forwardCm: 0,
@@ -242,7 +233,7 @@ export const PRODUCTS: Product[] = [
     id: "necklace_locket",
     name: "Luna Locket",
     category: "necklaces",
-    price: "$1,150",
+    price: "Rs 1,150",
     description: "A polished gold locket on a fine chain — a hidden place for whatever you carry with you.",
     modelPath: "/models/necklaces/luna_locket.glb",
     arEnabled: true,
@@ -260,14 +251,12 @@ export const PRODUCTS: Product[] = [
     id: "necklace_vega",
     name: "Vega Beaded Necklace",
     category: "necklaces",
-    price: "$1,250",
+    price: "Rs 1,250",
     description: "Hand-strung beads in black, white and red on a fine cord.",
     modelPath: "/models/necklaces/new.glb",
     arEnabled: true,
     image: "/images/necklace1.png",
     preserveMaterials: true,
-    // Ships on a display prop (SHIRLEY material node, like Orlaith's bust) —
-    // stripped at load so only the beads remain.
     necklaceStrip: ['shirley', 'polysurface1421'],
     necklaceAnchor: {
       pivotOffset: { x: 0.1, z: -4.0 }, dropCm: 5.4,
@@ -279,14 +268,12 @@ export const PRODUCTS: Product[] = [
     id: "ring_polaris",
     name: "Polaris Solitaire",
     category: "rings",
-    price: "$2,400",
+    price: "Rs 2,400",
     description: "A brilliant-cut solitaire held in a four-prong crown, on a pavé-lined band made to measure.",
     modelPath: "/models/rings/polaris_solitaire.glb",
     arEnabled: true, // hand-tracked try-on (ring finger)
     image: "/images/ring1.png",
     preserveMaterials: true,
-    // GLB hole axis loads along world X (band faced the camera) → roll 90°
-    // to put it along the finger. If the gem points at the palm, use -90.
     arFit: { rotationDeg: [0, 0, 90] },
     // Calibrated on camera 2026-07-16 (size = × on-screen knuckle spacing).
     ringFit: { alongT: 0.62, sizeCm: 1.15 },
@@ -295,15 +282,12 @@ export const PRODUCTS: Product[] = [
     id: "ring_rosanna",
     name: "Rosanna Pavé Band",
     category: "rings",
-    price: "$1,600",
+    price: "Rs 1,600",
     description: "A slender band traced with pavé-set stones, cast as a single piece and signed in gold.",
     modelPath: "/models/rings/rosanna_pave_band.glb",
-    // ⚠ 61 MB GLB — works, but loads slowly; re-export compressed for ship.
     arEnabled: true,
     image: "/images/ring1.png",
     preserveMaterials: true,
-    // Two rotations align the hole axis; [44,…] showed the band's BACK —
-    // the 180° twin puts the pavé face outward.
     arFit: { rotationDeg: [-136, 0, 0] },
     // Calibrated 2026-07-16; gemFlip → pavé shows on the back of the hand.
     ringFit: { alongT: 0.5, sizeCm: 1.4, gemFlip: true },
@@ -312,7 +296,7 @@ export const PRODUCTS: Product[] = [
     id: "ring_silver_moon",
     name: "Silver Moon Ring",
     category: "rings",
-    price: "$1,900",
+    price: "Rs 1,900",
     description: "A crescent-set band in moonlit silver, poised on the finger.",
     modelPath: "/models/rings/silver_moon_ring.glb",
     arEnabled: true,
@@ -325,15 +309,12 @@ export const PRODUCTS: Product[] = [
     id: "bracelet_lyra",
     name: "Lyra Topaz Weave",
     category: "bracelets",
-    price: "$1,350",
+    price: "Rs 1,350",
     description: "Woven gold strands set with blue topaz, clasped in hand-polished gold.",
     modelPath: "/models/bracelets/lyra_topaz_weave.glb",
-    // ⚠ 35 MB GLB — loads slowly; re-export compressed before ship.
     arEnabled: true,
     image: "/images/bracelet1.png",
     preserveMaterials: true,
-    // The GLB ships ON a velvet display pillow ("Cube.000" / Crushed_Velvet)
-    // — stripped at load, same mechanism as Orlaith's bust.
     necklaceStrip: ['cube', 'velvet'],
     braceletFit: { loose: 1.15 },
   },
@@ -341,7 +322,7 @@ export const PRODUCTS: Product[] = [
     id: "bracelet_aurelia",
     name: "Aurelia Bangle",
     category: "bracelets",
-    price: "$1,100",
+    price: "Rs 1,100",
     description: "A sculpted gold bangle, worn a touch loose on the wrist.",
     modelPath: "/models/bracelets/bracelet (1).glb",
     arEnabled: true,

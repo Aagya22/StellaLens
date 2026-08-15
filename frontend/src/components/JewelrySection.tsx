@@ -7,18 +7,26 @@ import { PRODUCTS, Product } from '@/data/products';
 const priceValue = (p: Product) => Number(p.price.replace(/[^0-9.]/g, '')) || 0;
 
 interface JewelrySectionProps {
-  activeTab: 'home' | 'jewelry' | 'about';
+  activeTab: 'home' | 'jewelry' | 'about' | 'checkout';
   setActiveArProduct: (product: Product | null) => void;
   selectedCategory: 'all' | Product['category'];
   setSelectedCategory: (category: 'all' | Product['category']) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  onAddToCart: (product: Product) => void;
 }
 
 export default function JewelrySection({
   activeTab,
   setActiveArProduct,
+  onAddToCart,
 }: JewelrySectionProps) {
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  const addToBag = (product: Product) => {
+    onAddToCart(product);
+    setJustAdded(product.id);
+    setTimeout(() => setJustAdded((id) => (id === product.id ? null : id)), 1600);
+  };
   const [selectedCat, setSelectedCat] = useState<'all' | 'earrings' | 'necklaces' | 'bracelets' | 'rings'>('all');
   const [sortBy, setSortBy] = useState<'featured' | 'low-high' | 'high-low'>('featured');
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
@@ -187,14 +195,28 @@ export default function JewelrySection({
                 </span>
               </div>
 
-              {product.arEnabled && (
+              <div className="mt-2 flex items-center gap-4">
                 <button
-                  onClick={() => setActiveArProduct(product)}
-                  className="mt-2 cursor-pointer text-[9px] tracking-[0.22em] uppercase text-[#c5a880] hover:text-black border-b border-[#c5a880]/30 hover:border-black transition-all duration-300 pb-0.5"
+                  onClick={() => addToBag(product)}
+                  className="cursor-pointer text-[9px] tracking-[0.22em] uppercase border-b transition-all duration-300 pb-0.5"
+                  style={{
+                    background: 'none', border: 'none', borderBottom: '1px solid',
+                    borderBottomColor: justAdded === product.id ? '#7a8a6f' : 'rgba(197,168,128,0.3)',
+                    color: justAdded === product.id ? '#7a8a6f' : '#c5a880',
+                    fontFamily: 'inherit', padding: 0, paddingBottom: '2px',
+                  }}
                 >
-                  Try On Live
+                  {justAdded === product.id ? 'Added ✓' : 'Add to Bag'}
                 </button>
-              )}
+                {product.arEnabled && (
+                  <button
+                    onClick={() => setActiveArProduct(product)}
+                    className="cursor-pointer text-[9px] tracking-[0.22em] uppercase text-[#c5a880] hover:text-black border-b border-[#c5a880]/30 hover:border-black transition-all duration-300 pb-0.5"
+                  >
+                    Try On Live
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

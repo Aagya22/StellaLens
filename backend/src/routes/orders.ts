@@ -1,19 +1,31 @@
 import { Router, Request, Response } from 'express';
 import { isDatabaseReady } from '../config/db';
-import { OrderModel, generateReference } from '../models/Order';
+import { OrderModel, generateReference, publicOrder } from '../models/Order';
 import { createOrderSchema } from '../schemas/order';
 import { HttpError, asyncHandler } from '../middleware/errorHandler';
 import { rateLimit } from '../middleware/rateLimit';
+import { requireAuth, attachUser } from '../middleware/auth';
+import { CATALOG, CURRENCY, SHIPPING, priceBasket, MAX_QUANTITY_PER_ITEM } from '../data/catalog';
 
 export const ordersRouter = Router();
+ordersRouter.get('/config', (_req: Request, res: Response) => {
+  res.json({
+    currency: CURRENCY,
+    deliveryMinor: SHIPPING.deliveryMinor,
+    freeDeliveryThresholdMinor: SHIPPING.freeDeliveryThresholdMinor,
+    estimatedDays: SHIPPING.estimatedDays,
+    maxQuantityPerItem: MAX_QUANTITY_PER_ITEM,
+  });
+});
 
 ordersRouter.post(
   '/',
   rateLimit({ windowMs: 60_000, max: 10 }),
+  attachUser,
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = createOrderSchema.safeParse(req.body);
     if (!parsed.success) {
-      // Field-keyed messages so the form can show them next to the inputs.
       const fieldErrors: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
         const field = issue.path.join('.') || 'body';
@@ -22,28 +34,50 @@ ordersRouter.post(
       throw new HttpError(400, 'Please check the details entered', fieldErrors);
     }
 
-    // Never report success for an order we couldn't store — a lost bespoke
-    // enquiry is a lost customer who thinks they've already been in touch.
+    const { customer, shipping, items } = parsed.data;
+
+    const unknown = items.filter((item) => !CATALOG[item.productId]);
+    if (unknown.length) {
+      throw new HttpError(400, 'Your bag contains an item we no longer carry', {
+        items: unknown.map((item) => item.productId).join(', '),
+      });
+    }
     if (!isDatabaseReady()) {
       throw new HttpError(503, 'We cannot take orders right now — please try again shortly');
     }
 
+    const quote = priceBasket(items);
     const order = await OrderModel.create({
-      ...parsed.data,
       reference: generateReference(),
+      user: req.user?._id,
+      customer,
+      shipping,
+      items: quote.lines.map((line, i) => ({
+        ...line,
+        customizations: items[i].customizations,
+      })),
+      totals: quote.totals,
     });
-
-    // Deliberately no customer contact details in the logs.
-    console.info(`[orders] ${order.reference} — ${order.productName}`);
+    console.info(
+      `[orders] ${order.reference} — ${order.items.length} item(s), ` +
+      `${quote.totals.totalMinor / 100} ${quote.totals.currency}`
+    );
 
     res.status(201).json({
-      message: 'Bespoke order request received',
-      data: {
-        reference: order.reference,
-        productName: order.productName,
-        price: order.price,
-        createdAt: order.createdAt,
-      },
+      message: 'Order placed',
+      order: publicOrder(order),
     });
+  })
+);
+
+ordersRouter.get(
+  '/mine',
+  attachUser,
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orders = await OrderModel.find({ user: req.user!._id })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    res.json({ orders: orders.map(publicOrder) });
   })
 );

@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { PRODUCTS, Product } from '@/data/products';
-import OrderModal from '@/components/OrderModal';
 import AuthModal from '@/components/AuthModal';
+import CheckoutSection from '@/components/CheckoutSection';
 import { useAuth } from '@/context/AuthContext';
+import { useCart } from '@/context/CartContext';
 import ModelViewer from '@/components/ModelViewer';
 import Navbar from '@/components/Navbar';
 import JewelrySection from '@/components/JewelrySection';
@@ -13,7 +14,7 @@ import dynamic from 'next/dynamic';
 
 const ARView = dynamic(() => import('@/components/ARView'), { ssr: false });
 
-type Tab = 'home' | 'jewelry' | 'about';
+type Tab = 'home' | 'jewelry' | 'about' | 'checkout';
 
 const ArrowRight = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size * 0.55} viewBox="0 0 13.6 7.5" fill="currentColor">
@@ -72,7 +73,7 @@ export default function Home() {
   useEffect(() => {
     const readHash = () => {
       const hash = window.location.hash.replace('#', '');
-      if (hash === 'jewelry' || hash === 'about' || hash === 'home' || hash === '') {
+      if (hash === 'jewelry' || hash === 'about' || hash === 'home' || hash === 'checkout' || hash === '') {
         setActiveTab(hash === '' ? 'home' : (hash as Tab));
       }
     };
@@ -94,12 +95,7 @@ export default function Home() {
   }, [activeTab, observe]);
 
   const [activeArProduct, setActiveArProduct] = useState<Product | null>(null);
-  const [orderData, setOrderData] = useState<any | null>(null);
-
-  /* Try-on needs an account: the ear calibration is saved against the person,
-     so there has to be a person to save it against. Asking for the product
-     they wanted first and opening it straight after sign-in keeps that from
-     feeling like a dead end. */
+  const { add: addToCart, count: cartCount } = useCart();
   const { user, loading: authLoading } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [pendingArProduct, setPendingArProduct] = useState<Product | null>(null);
@@ -178,9 +174,9 @@ export default function Home() {
       <Navbar
         activeTab={activeTab}
         goToTab={goToTab}
-        orderData={orderData}
-        setOrderData={setOrderData}
         onSignInClick={() => { setPendingArProduct(null); setAuthModalOpen(true); }}
+        onCartClick={() => goToTab('checkout')}
+        cartCount={cartCount}
       />
 
       <main className="flex-1 w-full">
@@ -524,6 +520,13 @@ export default function Home() {
           setSelectedCategory={setSelectedCategory}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
+          onAddToCart={(product) => addToCart(product.id)}
+        />
+
+        <CheckoutSection
+          activeTab={activeTab}
+          onBrowse={() => goToTab('jewelry')}
+          onSignInClick={() => { setPendingArProduct(null); setAuthModalOpen(true); }}
         />
       </main>
 
@@ -573,15 +576,15 @@ export default function Home() {
         <ARView
           product={activeArProduct}
           onClose={() => setActiveArProduct(null)}
-          onOpenOrderModal={setOrderData}
+          onOpenOrderModal={(details: any) => {
+            // AR now feeds the bag rather than its own one-off order form, so
+            // there is a single path to placing an order.
+            addToCart(details.productId, details.customizations ?? {});
+            setActiveArProduct(null);
+            goToTab('checkout');
+          }}
         />
       )}
-
-      <OrderModal
-        isOpen={orderData !== null}
-        onClose={() => setOrderData(null)}
-        orderDetails={orderData}
-      />
 
       <AuthModal
         isOpen={authModalOpen}
