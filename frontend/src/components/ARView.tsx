@@ -15,6 +15,7 @@ import { BraceletSystem } from '@/lib/ar/bracelets';
 import { estimateHeadPose } from '@/lib/ar/headPose';
 import { EarAnchor } from '@/lib/ar/earAnchor';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { Product, PRODUCTS } from '@/data/products';
 
 interface ARViewProps {
@@ -72,45 +73,33 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   const [topGemColor,   setTopGemColor]   = useState(GEM_MAP.ruby);
   const [bottomGemColor,setBottomGemColor]= useState(GEM_MAP.tanzanite);
 
-  /* Gem swatches must not repaint a preserved model until actually clicked */
   const gemsTouched = useRef(false);
 
-  /* The try-on rail switches pieces without leaving the AR view; the AR
-     pipeline re-inits because the main effect is keyed on this. */
   const [activeProduct, setActiveProduct] = useState(product);
   useEffect(() => { setActiveProduct(product); }, [product]);
   useEffect(() => { setMetalTone('gold'); }, [activeProduct]); // model reloads on gold
 
-  /* ── TEMPORARY: per-product ear-anchor calibration (canonical cm).
-     */
   const [calibEar, setCalibEar] = useState<'userRight' | 'userLeft'>('userRight');
   const [, setCalibTick] = useState(0);
-  /* Live body-fit state for the necklace readout — this used to be console
-     only, and could go silent entirely if the pose model never loaded. */
   const [bodyFitInfo, setBodyFitInfo] = useState<
     { status: string; cm: number | null; scale: number; samples: number; needed: number; baseline: number } | null
   >(null);
 
-  /* Two-tap earlobe calibration. Step 0 = off, 1 = waiting for their LEFT
-     lobe, 2 = their RIGHT. The ref is what the pointer handler reads; the
-     state only drives the prompt. */
   const calibStepRef = useRef(0);
   const [calibStep, setCalibStep] = useState(0);
   const [calibHint, setCalibHint] = useState('');
 
-  /* The account is the source of truth for where this person's lobes are, so
-     the fitting follows them to any device and is only ever set up once. */
   const { user, loading: authLoading, saveCalibration, clearCalibration } = useAuth();
+  const { toast } = useToast();
   const lobesTuned = !!user?.earCalibration;
 
-  // Refs so the AR effect and its pointer handler always see current values
-  // without being torn down and rebuilt every time the user object changes.
   const calibrationRef = useRef(user?.earCalibration ?? null);
   const saveCalibrationRef = useRef(saveCalibration);
+  const toastRef = useRef(toast);
   useEffect(() => { calibrationRef.current = user?.earCalibration ?? null; }, [user]);
   useEffect(() => { saveCalibrationRef.current = saveCalibration; }, [saveCalibration]);
+  useEffect(() => { toastRef.current = toast; }, [toast]);
 
-  // Push the saved fitting into the engine whenever it loads or changes.
   useEffect(() => {
     earringsRef.current?.setUserLobes(user?.earCalibration ?? null);
   }, [user?.earCalibration]);
@@ -128,12 +117,11 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   const resetLobeCalibration = () => {
     earringsRef.current?.resetLobes();
     cancelLobeCalibration();
-    void clearCalibration();
+    clearCalibration()
+      .then(() => toast({ kind: 'info', title: 'Ear fitting cleared', message: 'Tap each earlobe once to set it up again.' }))
+      .catch(() => toast({ kind: 'error', title: 'Could not clear the fitting', message: 'Please try again in a moment.' }));
   };
 
-  /* First visit to the AR view with no saved fitting: start the two taps
-     rather than waiting to be found. Once per mount, and only after the view
-     is actually live — prompting over a loading screen has nothing to tap. */
   const autoPromptedRef = useRef(false);
   useEffect(() => {
     if (activeProduct.category !== 'earrings') return;
@@ -269,9 +257,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
     const view = { stageW: 1, stageH: 1, videoW: 1, videoH: 1, cover: { scale: 1, offsetX: 0, offsetY: 0 } };
 
-    /* Lives inside the AR effect because it needs the live `camera` and
-       cover-fit. A tap is walked back through everything the stage does to the
-       render buffer: the CSS mirror + zoom, then the object-cover fit. */
     const onStagePointer = (e: PointerEvent) => {
       const step = calibStepRef.current;
       if (!step || !camera || !containerRef.current) return;
@@ -303,14 +288,22 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       }
       calibStepRef.current = 0;
       setCalibStep(0);
-      // Save against the account so this never has to be done again, on any
-      // device. The engine has already cached it locally, so a failed save
-      // costs them the sync, not this session's fitting.
       saveCalibrationRef.current({
         screenLeft: saved.screenLeft,
         screenRight: saved.screenRight,
+      }).then(() => {
+        toastRef.current({
+          kind: 'success',
+          title: 'Ear fitting saved',
+          message: 'Earrings will sit here for you from now on, on any device.',
+        });
       }).catch(() => {
         setCalibHint("Saved on this device, but we couldn't sync it to your account.");
+        toastRef.current({
+          kind: 'error',
+          title: 'Fitting not synced',
+          message: 'It works for this session, but we could not save it to your account.',
+        });
       });
     };
 
@@ -333,15 +326,8 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     const resizeRenderer = () => {
       if (!renderer || !camera || !containerRef.current) return;
       updateView();
-      // The buffer only needs enough pixels to cover the STAGE, not the
-      // camera's full resolution. cover.scale is how far the frame is scaled
-      // to fill the card, so that (times the screen's pixel density and the
-      // CSS zoom) is the real requirement. A 1080p webcam in a ~450px card was
-      // drawing several times more pixels than could ever be shown.
       const needed = view.cover.scale * (window.devicePixelRatio || 1) * CAMERA_ZOOM;
       renderer.setPixelRatio(THREE.MathUtils.clamp(needed, 0.75, 2));
-      // Render at the video's own resolution/aspect; the canvas is CSS
-      // object-cover so it crops identically to the video feed.
       renderer.setSize(view.videoW, view.videoH, false);
       camera.aspect = view.videoW / view.videoH;
       camera.fov = vfovDeg;
@@ -382,11 +368,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         setLoadingMsg('Initializing 3D renderer...');
         const canvas = canvasRef.current;
         if (!canvas) throw new Error('Canvas not found');
-        // preserveDrawingBuffer: the "Save Look" snapshot composites this
-        // canvas after the frame renders.
         renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
-        // Rings/bracelets clip their far half with a per-frame plane (the
-        // production wristwear technique — render only the front portion).
         renderer.localClippingEnabled = true;
         // Cap DPR at 2 — 3x phone displays would otherwise render 9× the pixels.
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -405,9 +387,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(200, 400, 600); scene.add(key); keyRef.current = key;
         const fill = new THREE.DirectionalLight(0xffffff, 0.8); fill.position.set(-300, 200, 200); scene.add(fill); fillRef.current = fill;
 
-   
-        // near=4cm: with cm units, a tiny near plane collapses depth-buffer
-        // precision at face distance — ring wrap (mm margins) z-fights.
         camera = new THREE.PerspectiveCamera(vfovDeg, view.videoW / view.videoH, 4, 200);
         camera.position.set(0, 0, 0);
         camera.lookAt(0, 0, -1);
@@ -417,8 +396,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         window.addEventListener('keydown', onFovKey);
         window.addEventListener('pointerdown', onStagePointer);
 
-        // Rings AND bracelets track the HAND; everything else tracks the
-        // face. The trackers share one interface (init/ready/detect/dispose).
+
         const isRing = activeProduct.category === 'rings';
         const isBracelet = activeProduct.category === 'bracelets';
         const isHand = isRing || isBracelet;
@@ -432,8 +410,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
         const gltfLoader = new GLTFLoader();
         earringsRef.current  = new EarringsSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
-        // The engine is built asynchronously, so the effect that watches the
-        // account has usually already run by now — apply the saved fitting here.
         earringsRef.current.setUserLobes(calibrationRef.current);
         necklacesRef.current = new NecklaceSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
         ringsRef.current     = new RingSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });

@@ -62,3 +62,34 @@ export interface AuthUser {
   earCalibration: EarCalibration | null;
   createdAt?: string;
 }
+
+export interface OrderItem {
+  productId: string;
+  productName: string;
+  unitPriceMinor: number;
+  quantity: number;
+  lineTotalMinor: number;
+  customizations?: Record<string, string | undefined>;
+}
+
+export interface OrderTotals {
+  subtotalMinor: number;
+  deliveryMinor: number;
+  totalMinor: number;
+  currency: string;
+}
+
+export interface PastOrder {
+  reference: string;
+  status: 'new' | 'contacted' | 'fulfilled' | 'cancelled';
+  items: OrderItem[];
+  shipping: {
+    address: string;
+    city: string;
+    postalCode: string;
+    country: string;
+    notes?: string;
+  };
+  totals: OrderTotals;
+  createdAt: string;
+}

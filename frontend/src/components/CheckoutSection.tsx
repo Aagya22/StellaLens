@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useCart, formatMoney, MAX_QUANTITY, CartLine } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { api, ApiError } from '@/lib/api';
 
 interface CheckoutConfig {
@@ -99,6 +100,7 @@ function SectionHead({ step, title, note }: { step: string; title: string; note?
 export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: CheckoutSectionProps) {
   const { lines, count, subtotalMinor, ready, setQuantity, remove, clear } = useCart();
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
 
   const [config, setConfig] = useState<CheckoutConfig | null>(null);
   const [name, setName] = useState('');
@@ -159,18 +161,34 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
         })),
       });
       setPlaced(res.order);
-      clear();
+      // The server empties the account's bag as part of placing the order —
+      // writing an empty one back would only race with it.
+      clear({ persist: false });
+      toast({
+        kind: 'success',
+        title: 'Order placed',
+        message: `${res.order.reference} — we will be in touch to confirm.`,
+        duration: 6000,
+      });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e2) {
       if (e2 instanceof ApiError) {
         const flat: Record<string, string> = {};
         for (const [k, v] of Object.entries(e2.fields ?? {})) flat[k.split('.').pop()!] = v;
         setFieldErrors(flat);
-        if (e2.status === 401) setFormError('Please sign in again to place this order.');
-        else if (Object.keys(flat).length === 0) setFormError(e2.message);
-        else setFormError('Some details need checking below.');
+        if (e2.status === 401) {
+          setFormError('Please sign in again to place this order.');
+          toast({ kind: 'error', title: 'Session expired', message: 'Please sign in again to place this order.' });
+        } else if (Object.keys(flat).length === 0) {
+          setFormError(e2.message);
+          toast({ kind: 'error', title: 'Order not placed', message: e2.message });
+        } else {
+          setFormError('Some details need checking below.');
+          toast({ kind: 'error', title: 'Check your details', message: 'Some fields below need a correction.' });
+        }
       } else {
         setFormError('Something went wrong. Please try again.');
+        toast({ kind: 'error', title: 'Order not placed', message: 'Something went wrong. Please try again.' });
       }
     } finally {
       setPlacing(false);
@@ -188,32 +206,59 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
       }}
     >
       <div className="w-full max-w-[1120px] px-5 sm:px-10">
-        {/* ── Header ── */}
-        <div className="flex flex-col items-center gap-4 mb-14">
-          <span style={{ ...label, letterSpacing: '0.34em', color: 'var(--gold-bright)' }}>
-            {placed ? 'Order Confirmed' : 'Checkout'}
-          </span>
+
+        <div className="flex flex-col items-center mb-20 pb-2">
           <h1
+            className="font-editorial"
             style={{
-              fontFamily: "var(--font-cormorant), serif",
-              fontSize: 'clamp(34px, 6vw, 56px)', fontWeight: 300,
-              color: 'var(--cream-text)', letterSpacing: '0.01em', lineHeight: 1,
+              fontFamily: "var(--font-cormorant), 'Cormorant Garamond', serif",
+              fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 300,
+              color: 'var(--cream-text)', letterSpacing: '0.03em',
+              lineHeight: 1.15, textAlign: 'center',
             }}
           >
-            {placed ? 'Thank you' : 'Your Bag'}
+            {placed ? 'Order Confirmed' : 'Checkout'}
           </h1>
-          <StarRule />
-          {!placed && count > 0 && (
-            <span style={{ ...label, letterSpacing: '0.14em', textTransform: 'none', fontSize: '12px' }}>
-              {count} {count === 1 ? 'piece' : 'pieces'}, each made to order
-            </span>
-          )}
         </div>
 
         {placed ? (
           <OrderConfirmation order={placed} onBrowse={onBrowse} />
-        ) : !ready ? (
+        ) : authLoading || !ready ? (
           <p style={{ ...label, textAlign: 'center' }}>Loading your bag…</p>
+        ) : !user ? (
+          <div style={{ ...card, padding: '44px 30px' }} className="relative flex flex-col items-center gap-5 text-center mx-auto" >
+            <CornerMarks />
+            <p style={{ fontFamily: "var(--font-jost), sans-serif", fontSize: '13px', color: 'var(--cream-muted)', lineHeight: 1.8, maxWidth: '400px' }}>
+              Your bag lives on your account. Sign in to add pieces, keep them across devices, and place an order.
+            </p>
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              <button
+                onClick={onSignInClick}
+                className="cursor-pointer"
+                style={{
+                  background: 'var(--gold)', color: '#fff', border: 'none',
+                  borderRadius: '999px', padding: '13px 32px',
+                  fontFamily: "var(--font-jost), sans-serif",
+                  fontSize: '10px', letterSpacing: '0.22em', textTransform: 'uppercase',
+                }}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={onBrowse}
+                className="cursor-pointer"
+                style={{
+                  background: 'none', color: 'var(--cream-text)',
+                  border: '1px solid var(--cream-border)',
+                  borderRadius: '999px', padding: '13px 32px',
+                  fontFamily: "var(--font-jost), sans-serif",
+                  fontSize: '10px', letterSpacing: '0.22em', textTransform: 'uppercase',
+                }}
+              >
+                Keep Browsing
+              </button>
+            </div>
+          </div>
         ) : count === 0 ? (
           <EmptyBag onBrowse={onBrowse} />
         ) : (
@@ -235,28 +280,8 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
                 </div>
               </div>
 
-              {!authLoading && !user ? (
-                <div style={{ ...card, padding: '30px 26px' }} className="relative flex flex-col gap-4 items-start">
-                  <CornerMarks />
-                  <SectionHead step="02" title="Sign in to continue" />
-                  <p style={{ fontFamily: "var(--font-jost), sans-serif", fontSize: '13px', color: 'var(--cream-muted)', lineHeight: 1.8, marginTop: '-12px' }}>
-                    Each piece is made to order, so we keep your order against your account.
-                  </p>
-                  <button
-                    onClick={onSignInClick}
-                    className="cursor-pointer"
-                    style={{
-                      background: 'var(--gold)', color: '#fff', border: 'none',
-                      borderRadius: '999px', padding: '13px 32px',
-                      fontFamily: "var(--font-jost), sans-serif",
-                      fontSize: '10px', letterSpacing: '0.22em', textTransform: 'uppercase',
-                    }}
-                  >
-                    Sign In
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={placeOrder} className="flex flex-col gap-7" id="checkout-form">
+
+              <form onSubmit={placeOrder} className="flex flex-col gap-7" id="checkout-form">
                   <div style={{ ...card, padding: '28px 26px' }}>
                     <SectionHead step="02" title="Contact" note="So we can confirm your order" />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
@@ -308,7 +333,6 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
                     </div>
                   </div>
                 </form>
-              )}
             </div>
 
             {/* ── Summary ── */}
@@ -454,7 +478,6 @@ function CartRow({
           border: '1px solid rgba(179,146,94,0.22)',
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={line.product.image} alt={line.product.name} className="w-full h-full object-cover" />
       </div>
 

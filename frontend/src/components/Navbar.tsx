@@ -1,20 +1,47 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
-type Tab = 'home' | 'jewelry' | 'about' | 'checkout';
+type Tab = 'home' | 'jewelry' | 'about' | 'checkout' | 'account';
 
 interface NavbarProps {
   activeTab: Tab;
   goToTab: (tab: Tab) => void;
   onSignInClick: () => void;
   onCartClick: () => void;
+  onAccountClick: () => void;
   cartCount: number;
 }
 
-export default function Navbar({ activeTab, goToTab, onSignInClick, onCartClick, cartCount }: NavbarProps) {
+export default function Navbar({
+  activeTab,
+  goToTab,
+  onSignInClick,
+  onCartClick,
+  onAccountClick,
+  cartCount,
+}: NavbarProps) {
   const { user, loading, logout } = useAuth();
+  const { toast } = useToast();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+
+  const signOut = async () => {
+    const name = user?.name;
+    await logout();
+    setConfirmSignOut(false);
+    goToTab('home');
+    toast({
+      kind: 'info',
+      title: 'Signed out',
+      message: name
+        ? `See you soon, ${name}. Your bag and ear fitting are saved to your account.`
+        : 'Your bag and ear fitting are saved to your account.',
+    });
+  };
+
   return (
     <header
       className="fixed top-0 left-0 z-40 w-full"
@@ -94,25 +121,26 @@ export default function Navbar({ activeTab, goToTab, onSignInClick, onCartClick,
               </span>
             )}
           </button>
-          {/* Account. Nothing is rendered until the session check settles, so
-              a signed-in visitor never sees "Sign In" flash first. */}
           {!loading && (
             user ? (
               <div className="flex items-center gap-3">
-                <span
-                  className="hidden sm:inline"
-                  title={user.email}
+                <button
+                  onClick={onAccountClick}
+                  className="hidden sm:inline underline-slide cursor-pointer"
+                  title={`${user.email} — view your account`}
                   style={{
+                    background: 'none', border: 'none', padding: '4px 0',
                     fontFamily: "var(--font-jost), sans-serif",
                     fontSize: '10px', letterSpacing: '0.16em', textTransform: 'uppercase',
                     color: 'var(--header-text)', maxWidth: '110px',
+                    fontWeight: activeTab === 'account' ? 500 : 400,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}
                 >
                   {user.name}
-                </span>
+                </button>
                 <button
-                  onClick={() => void logout()}
+                  onClick={() => setConfirmSignOut(true)}
                   className="cursor-pointer"
                   style={{
                     background: 'none', border: '1px solid rgba(74,64,56,0.2)',
@@ -174,6 +202,16 @@ export default function Navbar({ activeTab, goToTab, onSignInClick, onCartClick,
           );
         })}
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmSignOut}
+        title="Sign out of StellaLens?"
+        message="Your bag, your ear fitting, and your orders stay saved to your account. You can sign back in any time."
+        confirmLabel="Sign Out"
+        cancelLabel="Stay Signed In"
+        onConfirm={signOut}
+        onCancel={() => setConfirmSignOut(false)}
+      />
     </header>
   );
 }

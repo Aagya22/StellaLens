@@ -7,23 +7,25 @@ import { PRODUCTS, Product } from '@/data/products';
 const priceValue = (p: Product) => Number(p.price.replace(/[^0-9.]/g, '')) || 0;
 
 interface JewelrySectionProps {
-  activeTab: 'home' | 'jewelry' | 'about' | 'checkout';
+  activeTab: string;
   setActiveArProduct: (product: Product | null) => void;
   selectedCategory: 'all' | Product['category'];
   setSelectedCategory: (category: 'all' | Product['category']) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product) => boolean;
+  canAddToCart: boolean;
 }
 
 export default function JewelrySection({
   activeTab,
   setActiveArProduct,
   onAddToCart,
+  canAddToCart,
 }: JewelrySectionProps) {
   const [justAdded, setJustAdded] = useState<string | null>(null);
   const addToBag = (product: Product) => {
-    onAddToCart(product);
+    if (!onAddToCart(product)) return; // sign-in opened; nothing was added
     setJustAdded(product.id);
     setTimeout(() => setJustAdded((id) => (id === product.id ? null : id)), 1600);
   };
@@ -206,7 +208,11 @@ export default function JewelrySection({
                     fontFamily: 'inherit', padding: 0, paddingBottom: '2px',
                   }}
                 >
-                  {justAdded === product.id ? 'Added ✓' : 'Add to Bag'}
+                  {justAdded === product.id
+                    ? 'Added ✓'
+                    : canAddToCart
+                      ? 'Add to Bag'
+                      : 'Sign In to Buy'}
                 </button>
                 {product.arEnabled && (
                   <button

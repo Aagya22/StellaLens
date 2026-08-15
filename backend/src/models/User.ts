@@ -18,6 +18,24 @@ const earCalibrationSchema = new Schema(
   { _id: false }
 );
 
+const cartCustomizationsSchema = new Schema(
+  {
+    topGem: { type: String, trim: true },
+    bottomGem: { type: String, trim: true },
+    scale: { type: String, trim: true },
+    metalTone: { type: String, trim: true },
+  },
+  { _id: false }
+);
+const cartItemSchema = new Schema(
+  {
+    productId: { type: String, required: true, trim: true },
+    quantity: { type: Number, required: true, min: 1 },
+    customizations: { type: cartCustomizationsSchema, default: {} },
+  },
+  { _id: false }
+);
+
 const userSchema = new Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 120 },
@@ -31,6 +49,7 @@ const userSchema = new Schema(
     },
     passwordHash: { type: String, required: true, select: false },
     earCalibration: { type: earCalibrationSchema, default: null },
+    cart: { type: [cartItemSchema], default: [] },
   },
   { timestamps: true }
 );
@@ -48,4 +67,12 @@ export function publicUser(user: UserDocument) {
     earCalibration: user.earCalibration ?? null,
     createdAt: user.createdAt,
   };
+}
+
+export function publicCart(user: UserDocument) {
+  return user.cart.map((item) => ({
+    productId: item.productId,
+    quantity: item.quantity,
+    customizations: item.customizations ?? {},
+  }));
 }

@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Jost } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
+import { ToastProvider } from "@/context/ToastContext";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -14,7 +15,7 @@ const cormorant = Cormorant_Garamond({
 const jost = Jost({
   variable: "--font-jost",
   subsets: ["latin"],
-  weight: ["300", "400", "500"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -33,9 +34,12 @@ export default function RootLayout({
       className={`${cormorant.variable} ${jost.variable} h-full`}
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider>
-          <CartProvider>{children}</CartProvider>
-        </AuthProvider>
+        {/* Toasts outermost: both the session and the bag report through them. */}
+        <ToastProvider>
+          <AuthProvider>
+            <CartProvider>{children}</CartProvider>
+          </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   );

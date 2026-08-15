@@ -58,6 +58,13 @@ ordersRouter.post(
       })),
       totals: quote.totals,
     });
+    try {
+      req.user!.set('cart', []);
+      await req.user!.save();
+    } catch (err) {
+      console.warn(`[orders] ${order.reference} placed but bag not cleared:`, (err as Error).message);
+    }
+
     console.info(
       `[orders] ${order.reference} — ${order.items.length} item(s), ` +
       `${quote.totals.totalMinor / 100} ${quote.totals.currency}`

@@ -6,7 +6,9 @@ import { PRODUCTS, Product } from '@/data/products';
 import AuthModal from '@/components/AuthModal';
 import CheckoutSection from '@/components/CheckoutSection';
 import { useAuth } from '@/context/AuthContext';
-import { useCart } from '@/context/CartContext';
+import { useCart, Customizations } from '@/context/CartContext';
+import { useToast } from '@/context/ToastContext';
+import AccountSection from '@/components/AccountSection';
 import ModelViewer from '@/components/ModelViewer';
 import Navbar from '@/components/Navbar';
 import JewelrySection from '@/components/JewelrySection';
@@ -14,7 +16,12 @@ import dynamic from 'next/dynamic';
 
 const ARView = dynamic(() => import('@/components/ARView'), { ssr: false });
 
-type Tab = 'home' | 'jewelry' | 'about' | 'checkout';
+type Tab = 'home' | 'jewelry' | 'about' | 'checkout' | 'account';
+
+const TABS: Tab[] = ['home', 'jewelry', 'about', 'checkout', 'account'];
+type PendingAction =
+  | { kind: 'try-on'; product: Product }
+  | { kind: 'add'; product: Product; customizations?: Customizations };
 
 const ArrowRight = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size * 0.55} viewBox="0 0 13.6 7.5" fill="currentColor">
@@ -73,9 +80,8 @@ export default function Home() {
   useEffect(() => {
     const readHash = () => {
       const hash = window.location.hash.replace('#', '');
-      if (hash === 'jewelry' || hash === 'about' || hash === 'home' || hash === 'checkout' || hash === '') {
-        setActiveTab(hash === '' ? 'home' : (hash as Tab));
-      }
+      if (hash === '') setActiveTab('home');
+      else if ((TABS as string[]).includes(hash)) setActiveTab(hash as Tab);
     };
     readHash();
     window.addEventListener('hashchange', readHash);
@@ -95,21 +101,50 @@ export default function Home() {
   }, [activeTab, observe]);
 
   const [activeArProduct, setActiveArProduct] = useState<Product | null>(null);
-  const { add: addToCart, count: cartCount } = useCart();
+  const { add: addToCart, count: cartCount, ready: cartReady } = useCart();
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [pendingArProduct, setPendingArProduct] = useState<Product | null>(null);
+  const [pending, setPending] = useState<PendingAction | null>(null);
+
+  const requireAccount = useCallback((action: PendingAction): boolean => {
+    if (authLoading) return false; // still checking — a moment, not a refusal
+    if (user) return true;
+    setPending(action);
+    setAuthModalOpen(true);
+    return false;
+  }, [user, authLoading]);
 
   const requestTryOn = useCallback((product: Product | null) => {
     if (!product) { setActiveArProduct(null); return; }
-    if (authLoading) return; // still checking — a moment, not a refusal
-    if (!user) {
-      setPendingArProduct(product);
-      setAuthModalOpen(true);
-      return;
-    }
+    if (!requireAccount({ kind: 'try-on', product })) return;
     setActiveArProduct(product);
-  }, [user, authLoading]);
+  }, [requireAccount]);
+
+  const requestAddToCart = useCallback(
+    (product: Product, customizations?: Customizations): boolean => {
+      if (!requireAccount({ kind: 'add', product, customizations })) return false;
+      const added = addToCart(product.id, customizations ?? {});
+      if (added) {
+        toast({
+          kind: 'success',
+          title: 'Added to your bag',
+          message: `${product.name} — saved to your account.`,
+        });
+      }
+      return added;
+    },
+    [requireAccount, addToCart, toast]
+  );
+
+  const [resumeAdd, setResumeAdd] =
+    useState<{ product: Product; customizations?: Customizations } | null>(null);
+
+  useEffect(() => {
+    if (!resumeAdd || !user || !cartReady) return;
+    requestAddToCart(resumeAdd.product, resumeAdd.customizations);
+    setResumeAdd(null);
+  }, [resumeAdd, user, cartReady, requestAddToCart]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | Product['category']>('all');
   const [collectionIndex, setCollectionIndex] = useState(1);
@@ -174,8 +209,9 @@ export default function Home() {
       <Navbar
         activeTab={activeTab}
         goToTab={goToTab}
-        onSignInClick={() => { setPendingArProduct(null); setAuthModalOpen(true); }}
+        onSignInClick={() => { setPending(null); setAuthModalOpen(true); }}
         onCartClick={() => goToTab('checkout')}
+        onAccountClick={() => goToTab('account')}
         cartCount={cartCount}
       />
 
@@ -377,7 +413,7 @@ export default function Home() {
                     <button
                       onClick={() => {
                         const prod = PRODUCTS.find(p => p.id === 'earring_diamond');
-                        if (prod) setActiveArProduct(prod);
+                        if (prod) requestTryOn(prod);
                       }}
                       className="cursor-pointer uppercase font-semibold text-[10px] tracking-[0.25em] py-3 px-12 mt-3 transition-all duration-300 hover:bg-[#c5a880] hover:text-white"
                       style={{
@@ -520,13 +556,21 @@ export default function Home() {
           setSelectedCategory={setSelectedCategory}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
-          onAddToCart={(product) => addToCart(product.id)}
+          onAddToCart={requestAddToCart}
+          canAddToCart={!!user}
         />
 
         <CheckoutSection
           activeTab={activeTab}
           onBrowse={() => goToTab('jewelry')}
-          onSignInClick={() => { setPendingArProduct(null); setAuthModalOpen(true); }}
+          onSignInClick={() => { setPending(null); setAuthModalOpen(true); }}
+        />
+
+        <AccountSection
+          activeTab={activeTab}
+          onBrowse={() => goToTab('jewelry')}
+          onCheckout={() => goToTab('checkout')}
+          onSignInClick={() => { setPending(null); setAuthModalOpen(true); }}
         />
       </main>
 
@@ -579,25 +623,32 @@ export default function Home() {
           onOpenOrderModal={(details: any) => {
             // AR now feeds the bag rather than its own one-off order form, so
             // there is a single path to placing an order.
-            addToCart(details.productId, details.customizations ?? {});
+            const product = PRODUCTS.find((p) => p.id === details.productId);
             setActiveArProduct(null);
-            goToTab('checkout');
+            if (product && requestAddToCart(product, details.customizations ?? {})) {
+              goToTab('checkout');
+            }
           }}
         />
       )}
 
       <AuthModal
         isOpen={authModalOpen}
-        onClose={() => { setAuthModalOpen(false); setPendingArProduct(null); }}
+        onClose={() => { setAuthModalOpen(false); setPending(null); }}
         reason={
-          pendingArProduct
+          pending?.kind === 'try-on'
             ? 'Sign in to try on jewellery. We save your ear fitting to your account, so you only set it up once.'
-            : undefined
+            : pending?.kind === 'add'
+              ? 'Sign in to start a bag. We keep it on your account, so it is there on any device you use.'
+              : undefined
         }
         onAuthenticated={() => {
-          // Carry on into the piece they originally clicked.
-          if (pendingArProduct) setActiveArProduct(pendingArProduct);
-          setPendingArProduct(null);
+          if (pending?.kind === 'try-on') setActiveArProduct(pending.product);
+          if (pending?.kind === 'add') {
+            const { product, customizations } = pending;
+            setResumeAdd({ product, customizations });
+          }
+          setPending(null);
         }}
       />
     </div>

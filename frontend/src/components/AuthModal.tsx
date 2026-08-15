@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { ApiError } from '@/lib/api';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Shown above the form, e.g. why they're being asked to sign in. */
   reason?: string;
   onAuthenticated?: () => void;
 }
@@ -35,6 +35,7 @@ const inputStyle: React.CSSProperties = {
 
 export default function AuthModal({ isOpen, onClose, reason, onAuthenticated }: AuthModalProps) {
   const { login, register } = useAuth();
+  const { toast } = useToast();
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -43,8 +44,6 @@ export default function AuthModal({ isOpen, onClose, reason, onAuthenticated }: 
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Start clean each time it opens, so a previous failure isn't still on
-  // screen when someone reopens it.
   useEffect(() => {
     if (isOpen) {
       setFieldErrors({});
@@ -76,8 +75,17 @@ export default function AuthModal({ isOpen, onClose, reason, onAuthenticated }: 
     setFieldErrors({});
     setFormError('');
     try {
-      if (mode === 'register') await register({ name, email, password });
-      else await login({ email, password });
+      if (mode === 'register') {
+        await register({ name, email, password });
+        toast({
+          kind: 'success',
+          title: 'Account created',
+          message: `Welcome to StellaLens, ${name.trim() || 'and welcome in'}. Your bag and ear fitting will be saved here from now on.`,
+        });
+      } else {
+        await login({ email, password });
+        toast({ kind: 'success', title: 'Signed in', message: 'Your bag and ear fitting are back.' });
+      }
       onAuthenticated?.();
       onClose();
     } catch (err) {
@@ -85,6 +93,10 @@ export default function AuthModal({ isOpen, onClose, reason, onAuthenticated }: 
         setFieldErrors(err.fields ?? {});
         // Don't repeat the headline when every point is already shown inline.
         if (!err.fields || Object.keys(err.fields).length === 0) setFormError(err.message);
+        // A dead server is not a form problem — say so where it can't be missed.
+        if (err.status === 0) {
+          toast({ kind: 'error', title: 'Cannot reach the server', message: err.message });
+        }
       } else {
         setFormError('Something went wrong. Please try again.');
       }
