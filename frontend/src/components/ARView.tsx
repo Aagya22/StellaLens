@@ -14,7 +14,7 @@ import { RingSystem } from '@/lib/ar/rings';
 import { BraceletSystem } from '@/lib/ar/bracelets';
 import { estimateHeadPose } from '@/lib/ar/headPose';
 import { EarAnchor } from '@/lib/ar/earAnchor';
-import { hasUserLobes } from '@/lib/ar/lobeModel';
+import { useAuth } from '@/context/AuthContext';
 import { Product, PRODUCTS } from '@/data/products';
 
 interface ARViewProps {
@@ -97,8 +97,23 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   const calibStepRef = useRef(0);
   const [calibStep, setCalibStep] = useState(0);
   const [calibHint, setCalibHint] = useState('');
-  const [lobesTuned, setLobesTuned] = useState(false);
-  useEffect(() => { setLobesTuned(hasUserLobes()); }, []);
+
+  /* The account is the source of truth for where this person's lobes are, so
+     the fitting follows them to any device and is only ever set up once. */
+  const { user, loading: authLoading, saveCalibration, clearCalibration } = useAuth();
+  const lobesTuned = !!user?.earCalibration;
+
+  // Refs so the AR effect and its pointer handler always see current values
+  // without being torn down and rebuilt every time the user object changes.
+  const calibrationRef = useRef(user?.earCalibration ?? null);
+  const saveCalibrationRef = useRef(saveCalibration);
+  useEffect(() => { calibrationRef.current = user?.earCalibration ?? null; }, [user]);
+  useEffect(() => { saveCalibrationRef.current = saveCalibration; }, [saveCalibration]);
+
+  // Push the saved fitting into the engine whenever it loads or changes.
+  useEffect(() => {
+    earringsRef.current?.setUserLobes(user?.earCalibration ?? null);
+  }, [user?.earCalibration]);
 
   const startLobeCalibration = () => {
     calibStepRef.current = 1;
@@ -113,8 +128,21 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   const resetLobeCalibration = () => {
     earringsRef.current?.resetLobes();
     cancelLobeCalibration();
-    setLobesTuned(false);
+    void clearCalibration();
   };
+
+  /* First visit to the AR view with no saved fitting: start the two taps
+     rather than waiting to be found. Once per mount, and only after the view
+     is actually live — prompting over a loading screen has nothing to tap. */
+  const autoPromptedRef = useRef(false);
+  useEffect(() => {
+    if (activeProduct.category !== 'earrings') return;
+    if (loadingMsg || authLoading) return;
+    if (!user || user.earCalibration) return;
+    if (autoPromptedRef.current) return;
+    autoPromptedRef.current = true;
+    startLobeCalibration();
+  }, [activeProduct, loadingMsg, authLoading, user]);
 
 
   useEffect(() => {
@@ -271,13 +299,19 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       if (step === 1) {
         calibStepRef.current = 2;
         setCalibStep(2);
-      } else {
-        calibStepRef.current = 0;
-        setCalibStep(0);
-        setLobesTuned(true);
-        // Read these off a few faces to retune CANONICAL_LOBE in lobeModel.ts.
-        console.info('[AR] lobes calibrated (head-local cm):', JSON.stringify(saved));
+        return;
       }
+      calibStepRef.current = 0;
+      setCalibStep(0);
+      // Save against the account so this never has to be done again, on any
+      // device. The engine has already cached it locally, so a failed save
+      // costs them the sync, not this session's fitting.
+      saveCalibrationRef.current({
+        screenLeft: saved.screenLeft,
+        screenRight: saved.screenRight,
+      }).catch(() => {
+        setCalibHint("Saved on this device, but we couldn't sync it to your account.");
+      });
     };
 
 
@@ -398,6 +432,9 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
         const gltfLoader = new GLTFLoader();
         earringsRef.current  = new EarringsSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
+        // The engine is built asynchronously, so the effect that watches the
+        // account has usually already run by now — apply the saved fitting here.
+        earringsRef.current.setUserLobes(calibrationRef.current);
         necklacesRef.current = new NecklaceSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
         ringsRef.current     = new RingSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
         braceletsRef.current = new BraceletSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });

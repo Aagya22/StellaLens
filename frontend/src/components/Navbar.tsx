@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 type Tab = 'home' | 'jewelry' | 'about';
 
@@ -9,9 +10,11 @@ interface NavbarProps {
   goToTab: (tab: Tab) => void;
   orderData: any;
   setOrderData: (data: any) => void;
+  onSignInClick: () => void;
 }
 
-export default function Navbar({ activeTab, goToTab, orderData, setOrderData }: NavbarProps) {
+export default function Navbar({ activeTab, goToTab, orderData, setOrderData, onSignInClick }: NavbarProps) {
+  const { user, loading, logout } = useAuth();
   return (
     <header
       className="fixed top-0 left-0 z-40 w-full"
@@ -94,6 +97,53 @@ export default function Navbar({ activeTab, goToTab, orderData, setOrderData }: 
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--gold)' }} />
             )}
           </button>
+          {/* Account. Nothing is rendered until the session check settles, so
+              a signed-in visitor never sees "Sign In" flash first. */}
+          {!loading && (
+            user ? (
+              <div className="flex items-center gap-3">
+                <span
+                  className="hidden sm:inline"
+                  title={user.email}
+                  style={{
+                    fontFamily: "var(--font-jost), sans-serif",
+                    fontSize: '10px', letterSpacing: '0.16em', textTransform: 'uppercase',
+                    color: 'var(--header-text)', maxWidth: '110px',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {user.name}
+                </span>
+                <button
+                  onClick={() => void logout()}
+                  className="cursor-pointer"
+                  style={{
+                    background: 'none', border: '1px solid rgba(74,64,56,0.2)',
+                    borderRadius: '999px', padding: '6px 14px',
+                    fontFamily: "var(--font-jost), sans-serif",
+                    fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase',
+                    color: 'var(--header-text)', whiteSpace: 'nowrap',
+                  }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onSignInClick}
+                className="cursor-pointer"
+                style={{
+                  background: 'none', border: '1px solid rgba(74,64,56,0.2)',
+                  borderRadius: '999px', padding: '6px 14px',
+                  fontFamily: "var(--font-jost), sans-serif",
+                  fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase',
+                  color: 'var(--header-text)', whiteSpace: 'nowrap',
+                }}
+              >
+                Sign In
+              </button>
+            )
+          )}
           <div className="flex md:hidden flex-col gap-1.5 cursor-pointer" style={{ lineHeight: 0 }}>
             <span className="block w-5 h-px" style={{ background: 'var(--header-text)' }} />
             <span className="block w-3 h-px" style={{ background: 'var(--header-text)' }} />

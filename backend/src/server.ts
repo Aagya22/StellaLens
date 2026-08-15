@@ -1,28 +1,30 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import mongoose from 'mongoose';
 
 import { env, corsOrigins, isProd } from './config/env';
 import { connectDatabase, disconnectDatabase, isDatabaseReady } from './config/db';
 import { ordersRouter } from './routes/orders';
+import { authRouter } from './routes/auth';
+import { meRouter } from './routes/me';
 import { errorHandler, notFound } from './middleware/errorHandler';
 
 const app = express();
 
-app.set('trust proxy', 1); // so req.ip is the client, not the proxy
+app.set('trust proxy', 1);
 app.use(
   cors({
-    // An allow-list, not `*`: this API takes names, phone numbers and
-    // addresses, so any origin being able to call it is not acceptable.
     origin(origin, callback) {
-      // No Origin header = curl, health checks, server-to-server.
       if (!origin) return callback(null, true);
       if (corsOrigins.includes(origin)) return callback(null, true);
       callback(new Error(`Origin ${origin} is not allowed`));
     },
+    credentials: true, // the session cookie has to cross origins
   })
 );
 app.use(express.json({ limit: '100kb' }));
+app.use(cookieParser());
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'StellaLens Celestial Backend is running' });
@@ -37,6 +39,8 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
+app.use('/api/auth', authRouter);
+app.use('/api/me', meRouter);
 app.use('/api/orders', ordersRouter);
 
 app.use(notFound);

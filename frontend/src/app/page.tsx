@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { PRODUCTS, Product } from '@/data/products';
 import OrderModal from '@/components/OrderModal';
+import AuthModal from '@/components/AuthModal';
+import { useAuth } from '@/context/AuthContext';
 import ModelViewer from '@/components/ModelViewer';
 import Navbar from '@/components/Navbar';
 import JewelrySection from '@/components/JewelrySection';
@@ -93,6 +95,25 @@ export default function Home() {
 
   const [activeArProduct, setActiveArProduct] = useState<Product | null>(null);
   const [orderData, setOrderData] = useState<any | null>(null);
+
+  /* Try-on needs an account: the ear calibration is saved against the person,
+     so there has to be a person to save it against. Asking for the product
+     they wanted first and opening it straight after sign-in keeps that from
+     feeling like a dead end. */
+  const { user, loading: authLoading } = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [pendingArProduct, setPendingArProduct] = useState<Product | null>(null);
+
+  const requestTryOn = useCallback((product: Product | null) => {
+    if (!product) { setActiveArProduct(null); return; }
+    if (authLoading) return; // still checking — a moment, not a refusal
+    if (!user) {
+      setPendingArProduct(product);
+      setAuthModalOpen(true);
+      return;
+    }
+    setActiveArProduct(product);
+  }, [user, authLoading]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | Product['category']>('all');
   const [collectionIndex, setCollectionIndex] = useState(1);
@@ -159,6 +180,7 @@ export default function Home() {
         goToTab={goToTab}
         orderData={orderData}
         setOrderData={setOrderData}
+        onSignInClick={() => { setPendingArProduct(null); setAuthModalOpen(true); }}
       />
 
       <main className="flex-1 w-full">
@@ -497,7 +519,7 @@ export default function Home() {
 
         <JewelrySection
           activeTab={activeTab}
-          setActiveArProduct={setActiveArProduct}
+          setActiveArProduct={requestTryOn}
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
           searchQuery={searchQuery}
@@ -559,6 +581,21 @@ export default function Home() {
         isOpen={orderData !== null}
         onClose={() => setOrderData(null)}
         orderDetails={orderData}
+      />
+
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => { setAuthModalOpen(false); setPendingArProduct(null); }}
+        reason={
+          pendingArProduct
+            ? 'Sign in to try on jewellery. We save your ear fitting to your account, so you only set it up once.'
+            : undefined
+        }
+        onAuthenticated={() => {
+          // Carry on into the piece they originally clicked.
+          if (pendingArProduct) setActiveArProduct(pendingArProduct);
+          setPendingArProduct(null);
+        }}
       />
     </div>
   );

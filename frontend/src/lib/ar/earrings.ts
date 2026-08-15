@@ -408,6 +408,21 @@ export class EarringsSystem {
     return this._userLobes !== null;
   }
 
+  setUserLobes(lobes) {
+    if (!lobes?.screenLeft || !lobes?.screenRight) {
+      this.resetLobes();
+      return;
+    }
+    this._userLobes = {
+      screenLeft: { ...lobes.screenLeft },
+      screenRight: { ...lobes.screenRight },
+    };
+    saveUserLobes(this._userLobes);
+    this._applyShape();
+    this._leftPos.reset();
+    this._rightPos.reset();
+  }
+
   resetLobes() {
     this._userLobes = null;
     clearUserLobes();
