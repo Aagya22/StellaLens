@@ -6,8 +6,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(5000),
   MONGODB_URI: z.string().min(1, 'required — see .env.example'),
-  /** Comma-separated browser origins allowed to call this API. */
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  JWT_SECRET: z.string().min(32, 'must be at least 32 characters — see .env.example'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
 });
 
 const parsed = envSchema.safeParse(process.env);
