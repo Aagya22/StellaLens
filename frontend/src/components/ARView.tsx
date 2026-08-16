@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { FaceTracker } from '@/lib/ar/faceTracking';
@@ -235,6 +236,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   useEffect(() => {
     let active = true;
     let renderer: THREE.WebGLRenderer | null = null;
+    let dracoLoader: DRACOLoader | null = null;
     let scene: THREE.Scene | null = null;
     let camera: THREE.PerspectiveCamera | null = null;
     let vfovDeg = WEBCAM_VFOV_DEG;
@@ -398,7 +400,11 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         if (!active) { tracker.dispose(); return; }
         trackerRef.current = tracker;
 
+        // Models are Draco-compressed; the decoder is vendored in /public/draco.
+        dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('/draco/');
         const gltfLoader = new GLTFLoader();
+        gltfLoader.setDRACOLoader(dracoLoader);
         earringsRef.current  = new EarringsSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
         earringsRef.current.setUserLobes(calibrationRef.current);
         necklacesRef.current = new NecklaceSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
@@ -606,6 +612,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       ringsRef.current?.dispose();
       braceletsRef.current?.dispose();
       if (renderer) renderer.dispose();
+      dracoLoader?.dispose();
     };
   }, [activeProduct]);
 
