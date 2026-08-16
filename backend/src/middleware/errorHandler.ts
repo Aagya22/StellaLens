@@ -7,8 +7,6 @@ export class HttpError extends Error {
   }
 }
 
-/** Wraps an async handler so a rejected promise reaches Express's error
-    pipeline instead of hanging the request. Express 4 does not do this. */
 export function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>
 ) {

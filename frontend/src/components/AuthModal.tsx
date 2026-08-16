@@ -91,9 +91,9 @@ export default function AuthModal({ isOpen, onClose, reason, onAuthenticated }: 
     } catch (err) {
       if (err instanceof ApiError) {
         setFieldErrors(err.fields ?? {});
-        // Don't repeat the headline when every point is already shown inline.
+
         if (!err.fields || Object.keys(err.fields).length === 0) setFormError(err.message);
-        // A dead server is not a form problem — say so where it can't be missed.
+
         if (err.status === 0) {
           toast({ kind: 'error', title: 'Cannot reach the server', message: err.message });
         }

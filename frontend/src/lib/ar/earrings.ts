@@ -15,31 +15,26 @@ import {
   SHAPE_TAU,
 } from "./lobeModel";
 
-
-/* How an earring hangs FROM the lobe (hook length, mount point) — not where
-   the lobe is. That lives in lobeModel.ts. Zero = pivot sits on the lobe. */
+// How a piece hangs FROM the lobe. Where the lobe is lives in lobeModel.ts.
 export const EAR_ANCHOR = {
   userRight: { lateral: 0, down: 0, back: 0 },
   userLeft:  { lateral: 0, down: 0, back: 0 },
 };
 
-const fadeStartDeg = 8;  // far ear starts fading
-const fadeEndDeg   = 15; // far ear fully hidden — quick, before it drifts to the cheek
-const HIDE_ALL_DEG = 57; // beyond this, tracking isn't trustworthy — hide both
-
+const fadeStartDeg = 8;
+const fadeEndDeg   = 15;
+const HIDE_ALL_DEG = 57;
 
 const TRACKING_ZONE_W = 0.7;
 const TRACKING_ZONE_H = 0.7;
 const ZONE_FADE_MARGIN = 0.1;
 
-
-const TELEPORT_SPEED = 5000; // px/s
+const TELEPORT_SPEED = 5000;
 
 const DANGLE_FORCE_OSCILLATION = false;
 const DANGLE_DEBUG_PIVOT = false;
-const DANGLE_DEBUG_ACCEL = false; // log |accel| fed to the spring
-/* Diagnostic dots: RED = raw matrix-projected ear target (pre-smoothing),
-   BLUE = final smoothed earring position. Left ear only. */
+const DANGLE_DEBUG_ACCEL = false;
+
 const POSITION_DEBUG = false;
 
 export const DANGLE_DEFAULTS = {
@@ -47,20 +42,16 @@ export const DANGLE_DEFAULTS = {
   damping: 18,
   maxSwingDeg: 5,
   response: 0.003,
-  pivotDrop: 0.3,      // fraction of height to lower the pivot from the top
-  yawFollow: 0.15,     // mostly camera-facing — user preferred the front view
-                       // over seeing the hook/clutch side on head turns
-  accelDeadZone: 80,   // ignore |accel| below this (noise floor)
+  pivotDrop: 0.3,
+  yawFollow: 0.15,
+
+  accelDeadZone: 80,
 };
 
-// Lower cutoff = stiller when holding still (a touch more lag on fast moves)
 const EARRING_MIN_CUTOFF = 0.6;
 const EARRING_BETA = 0.05;
 
-/* Earring size in canonical metric units (same space as EAR_ANCHOR / the
-   9-unit interocular). ~3 ≈ a 3cm drop. Tune if earrings look too big/small. */
 const EARRING_METRIC_SIZE = 3;
-
 
 const REFERENCE_INTEROCULAR = 0.075;
 const WIDTH_SCALE_MIN = 0.8;
@@ -74,12 +65,9 @@ const _mountShift = new THREE.Vector3();
 const _tapPoint = new THREE.Vector3();
 const _tapRay = new THREE.Vector3();
 
-/* Studs only: a depth-only sphere tucked behind each stud makes its post /
-   clutch side depth-clip into the "lobe", so the gem reads as pierced
-   through skin instead of a decal floating on top. */
 const LOBE_OCC_RADIUS_CM = 1.5;
 const LOBE_OCC_BACK_CM = 0.8;
-// Temps for extracting raw yaw from the pose matrix (visibility check only)
+
 const _yawPos = new THREE.Vector3();
 const _yawQuat = new THREE.Quaternion();
 const _yawScl = new THREE.Vector3();
@@ -131,7 +119,6 @@ function normalizeModelToUnit(root) {
   root.position.z -= center.z;
 }
 
-
 function splitGeometryByWorldX(mesh, side, gapMin) {
   if (Array.isArray(mesh.material)) return null;
   let geom = mesh.geometry;
@@ -157,7 +144,7 @@ function splitGeometryByWorldX(mesh, side, gapMin) {
   }
   if (kept.length === 0) return "empty";
   if (kept.length === triCount) return null;
-  // Safety: a true pair has an empty GAP at the split plane. 
+
   if (nearestToPlane < gapMin) return null;
   const out = new THREE.BufferGeometry();
   for (const name of Object.keys(geom.attributes)) {
@@ -193,7 +180,6 @@ function extractHalf(root, side) {
     }
   }
 
-  // Whole-mesh partition impossible — try triangle-level splitting.
   const span = new THREE.Box3().setFromObject(clone).getSize(new THREE.Vector3()).x;
   const gapMin = span * 0.015;
   let splitAny = false;
@@ -210,7 +196,6 @@ function extractHalf(root, side) {
   }
   return splitAny ? clone : null;
 }
-
 
 function normalizeHalvesJointly(a, b) {
   const maxDimOf = (obj) => {
@@ -232,7 +217,6 @@ function normalizeHalvesJointly(a, b) {
   pivotTop(b);
 }
 
-/* Soft radial-gradient dot for the fake contact shadow (shared texture). */
 let _shadowTex = null;
 function contactShadowTexture() {
   if (_shadowTex) return _shadowTex;
@@ -308,13 +292,12 @@ export class EarringsSystem {
     this.scene = scene;
     this.loader = gltfLoader;
     this.onStatus = onStatus ?? (() => { });
-    // Lobe positions (head-local cm). BASE = the canonical head; SCREEN = that
-    // base stretched to this face's proportions. Neither tracks landmarks.
+
     this._lobeBaseL = new THREE.Vector3(CANONICAL_LOBE.screenLeft.x, CANONICAL_LOBE.screenLeft.y, CANONICAL_LOBE.screenLeft.z);
     this._lobeBaseR = new THREE.Vector3(CANONICAL_LOBE.screenRight.x, CANONICAL_LOBE.screenRight.y, CANONICAL_LOBE.screenRight.z);
     this._lobeScreenL = this._lobeBaseL.clone();
     this._lobeScreenR = this._lobeBaseR.clone();
-    this._shapeW = 1; // face proportions vs canonical; 1 = exactly canonical
+    this._shapeW = 1;
     this._shapeH = 1;
     this._userLobes = loadUserLobes();
     this._applyShape();
@@ -341,19 +324,19 @@ export class EarringsSystem {
         this.group.add(m);
         return m;
       };
-      this._dbgRed = dot(0xff0000);   // raw matrix-projected target
-      this._dbgBlue = dot(0x0000ff);  // final smoothed position
+      this._dbgRed = dot(0xff0000);
+      this._dbgBlue = dot(0x0000ff);
     }
 
     this._leftPos = new OneEuroVec3({ minCutoff: EARRING_MIN_CUTOFF, beta: EARRING_BETA });
     this._rightPos = new OneEuroVec3({ minCutoff: EARRING_MIN_CUTOFF, beta: EARRING_BETA });
     this._leftRot = new OneEuroQuat({ minCutoff: EARRING_MIN_CUTOFF, beta: EARRING_BETA });
     this._rightRot = new OneEuroQuat({ minCutoff: EARRING_MIN_CUTOFF, beta: EARRING_BETA });
-    this._presence = 1;   // 0–1 global fade for tracking loss (#4)
+    this._presence = 1;
     this._loggedInteroc = false;
-    this._shadowScale = 0.35; // contact-shadow size relative to earring scale
-    this._type = "dangle";    // 'dangle' | 'hoop' | 'stud' — only dangle gets physics
-    this._fixedNodes = null;  // GLB node names that stay rigid (hook/clasp)
+    this._shadowScale = 0.35;
+    this._type = "dangle";
+    this._fixedNodes = null;
     this._leftShadow = null;
     this._rightShadow = null;
     this._anchor = EAR_ANCHOR;
@@ -391,12 +374,10 @@ export class EarringsSystem {
     this.group.visible = v;
   }
 
-  /** Live anchor object for the loaded product */
   getAnchor() {
     return this._anchor;
   }
 
-  /** Current lobe points (head-local canonical cm). */
   getLobes() {
     return {
       screenLeft: { x: this._lobeScreenL.x, y: this._lobeScreenL.y, z: this._lobeScreenL.z },
@@ -431,8 +412,6 @@ export class EarringsSystem {
     this._rightPos.reset();
   }
 
-  /* A tapped calibration measures this person's ears directly, so it REPLACES
-     the shape estimate rather than stacking with it. */
   _applyShape() {
     if (this._userLobes) {
       const u = this._userLobes;
@@ -445,27 +424,19 @@ export class EarringsSystem {
     this._lobeScreenR.set(this._lobeBaseR.x * w, this._lobeBaseR.y * h, this._lobeBaseR.z * w);
   }
 
-  /**
-   * Move one lobe so it lands under a tap. `side` is "screenLeft" (the user's
-   * RIGHT ear) or "screenRight" (their LEFT), named for the UNMIRRORED render.
-   * `ndcX`/`ndcY` are -1..1 in that same frame.
-   *
-   * One tap is one ray, so depth stays unobservable: head-local z is kept and
-   * only left/right + up/down are corrected.
-   */
   calibrateLobeFromTap({ side, ndcX, ndcY, camera }) {
     if (!this._havePose || !camera) return null;
-    // Seed from current placement so the untapped ear keeps its estimate.
+
     if (!this._userLobes) this._userLobes = this.getLobes();
     const lobe = side === "screenLeft" ? this._lobeScreenL : this._lobeScreenR;
     const here = _tapPoint.copy(lobe).applyMatrix4(this._poseWorld);
-    // Walk the ray through the tap out to that same depth.
+
     const ray = _tapRay.set(ndcX, ndcY, 0.5).unproject(camera).sub(camera.position);
     if (Math.abs(ray.z) < 1e-6) return null;
     ray.multiplyScalar((here.z - camera.position.z) / ray.z).add(camera.position);
     _invPose.copy(this._poseWorld).invert();
     ray.applyMatrix4(_invPose);
-    // A stray tap on a shoulder must not wreck the fit.
+
     const base = CANONICAL_LOBE[side];
     const lim = LOBE_TAP_LIMIT_CM;
     this._userLobes[side] = {
@@ -480,8 +451,6 @@ export class EarringsSystem {
     return this.getLobes();
   }
 
-  /** True while the occlusion heuristic thinks something (hair, hand,
-      phone) is covering either ear region. Set fresh each update(). */
   isSideOccluded() {
     return this._occludedLeft === true || this._occludedRight === true;
   }
@@ -500,7 +469,7 @@ export class EarringsSystem {
     pairMirror?: "flipX" | "rotateY";
   } = {}) {
     this.clear();
-   
+
     const src = anchor ?? EAR_ANCHOR;
     this._anchor = {
       userRight: { ...src.userRight },
@@ -509,7 +478,7 @@ export class EarringsSystem {
     this._dangle = { ...DANGLE_DEFAULTS, ...(dangle ?? {}) };
     this._fitScale = fit?.scale ?? 1;
     this._matOverrides = materials ?? null;
-    this._skin = skinPenetration; // cm pushed into the head so the attachment hides in the skin
+    this._skin = skinPenetration;
     if (contactShadow != null) this._shadowScale = contactShadow;
     this._type = type;
     this._fixedNodes = fixedNodes;
@@ -524,7 +493,7 @@ export class EarringsSystem {
         }
       });
       this._modelRoot = root;
-      
+
       const rotDeg = fit?.rotationDeg ?? null;
       if (rotDeg) {
         root.rotation.set(
@@ -536,7 +505,6 @@ export class EarringsSystem {
       }
       normalizeModelToUnit(root);
       if (preserveMaterials) {
-        
         root.traverse((o) => {
           if (!o.isMesh) return;
           const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -554,7 +522,6 @@ export class EarringsSystem {
         applyRealisticMaterials(root, modelPath);
       }
 
-      
       let leftModel = null;
       let rightModel = null;
       if (!singleEarring) {
@@ -571,9 +538,6 @@ export class EarringsSystem {
         leftModel = root.clone(true);
         rightModel = root.clone(true);
         if (pairMirror === "rotateY") {
-          // For hooks whose curve is authored in the X plane: a plain X-flip
-          // makes one clutch face forward. Rotating 180° about Y keeps the
-          // clutch facing BACKWARD on both ears.
           rightModel.rotation.y += Math.PI;
         } else {
           rightModel.scale.x *= -1;
@@ -590,27 +554,23 @@ export class EarringsSystem {
         this._lobeOccL = new THREE.Mesh(occGeo, occMat);
         this._lobeOccR = new THREE.Mesh(occGeo, occMat);
         for (const o of [this._lobeOccL, this._lobeOccR]) {
-          o.renderOrder = -1; // writes depth BEFORE the stud renders
+          o.renderOrder = -1;
           o.frustumCulled = false;
           o.scale.setScalar(LOBE_OCC_RADIUS_CM);
           this.group.add(o);
         }
       }
-      // Preserved models keep their authored gem colors until the user
-      // actively picks a swatch (setGemColors still works when called).
+
       if (!preserveMaterials) this.setGemColors(this._topGemColor, this._bottomGemColor);
       this.onStatus("");
     } catch (err) {
-      // No placeholder geometry — showing nothing beats showing a wrong ring.
       console.error("[AR] earring model failed to load:", modelPath, err);
       this.onStatus("Couldn't load this piece's 3D model.");
     }
   }
 
-  
   _mountModels(leftModel, rightModel) {
     const mount = (container, model, matsOut) => {
-      
       model.traverse((o) => {
         if (!o.isMesh) return;
         const cloneMat = (m) => {
@@ -625,15 +585,11 @@ export class EarringsSystem {
         o.material = Array.isArray(o.material) ? o.material.map(cloneMat) : cloneMat(o.material);
       });
 
-     
       if (this._type === "dangle" && this._fixedNodes && this._fixedNodes.length) {
         const fixedNames = new Set(this._fixedNodes);
         const fixedObjs = [];
         model.traverse((o) => { if (o.name && fixedNames.has(o.name)) fixedObjs.push(o); });
 
-        // Pivot = TOP of the drop (its highest vertex), which is the physical
-        // attachment point. The hook's own bounds are unreliable — hook
-        // geometry can extend past the joint — so measure the drop, not the hook.
         model.updateMatrixWorld(true);
         const hookSet = new Set();
         for (const o of fixedObjs) o.traverse((c) => hookSet.add(c));
@@ -648,18 +604,14 @@ export class EarringsSystem {
         swing.position.y = pivotY;
         fixedGroup.add(swing);
 
-        model.position.y -= pivotY; // keep content world-fixed
+        model.position.y -= pivotY;
         swing.add(model);
 
-        // Pull the hook subtrees up into fixedGroup (sibling of swing),
-        // preserving world transform so nothing visibly moves.
         container.updateMatrixWorld(true);
         for (const o of fixedObjs) fixedGroup.attach(o);
         return swing;
       }
 
-      // Fallback: whole earring swings as ONE piece from a pivot at the very
-      // top (highest Y = ear-wire tip), optionally lowered by pivotDrop.
       model.updateMatrixWorld(true);
       const swing = new THREE.Group();
       const box = new THREE.Box3().setFromObject(model);
@@ -676,25 +628,19 @@ export class EarringsSystem {
     this._leftSwingGroup = mount(this.left, leftModel, this._leftMats);
     this._rightSwingGroup = mount(this.right, rightModel, this._rightMats);
 
-    /* Put the container's ORIGIN on the earring's mount point. Otherwise it
-       lands wherever the GLB ended up after normalize + rotate: for models
-       without arFit.rotationDeg, normalizeModelToUnit runs BEFORE the default
-       90° X tilt, so "top at y=0" stops holding once that tilt is applied. */
     const alignMount = (container) => {
       container.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(container);
       if (!Number.isFinite(box.max.y) || box.isEmpty()) return;
       const cx = (box.min.x + box.max.x) / 2;
       const cz = (box.min.z + box.max.z) / 2;
-      // Studs sit flat ON the lobe (centre); dangles/hoops hang FROM it (top).
+
       const my = this._type === "stud" ? (box.min.y + box.max.y) / 2 : box.max.y;
       for (const child of container.children) child.position.sub(_mountShift.set(cx, my, cz));
     };
     alignMount(this.left);
     alignMount(this.right);
 
-    // TEMP: bright-green wireframe sphere at each swing pivot (child of the
-    // swing group, so it sits AT the pivot and moves with it).
     if (DANGLE_DEBUG_PIVOT) {
       const marker = () => {
         const m = new THREE.Mesh(
@@ -707,7 +653,6 @@ export class EarringsSystem {
       this._leftSwingGroup?.add(marker());
       this._rightSwingGroup?.add(marker());
 
-      // Full hierarchy of the LEFT side so we can see fixed vs swing wiring.
       const lines = [];
       const walk = (o, d) => {
         const kids = o.children.length;
@@ -720,7 +665,6 @@ export class EarringsSystem {
         "| type:", this._type, "| fixedNodes:", this._fixedNodes);
     }
 
-    
     const box = new THREE.Box3().setFromObject(this.left);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -734,7 +678,6 @@ export class EarringsSystem {
       );
     }
 
-   
     const makeShadow = () => {
       const mat = new THREE.SpriteMaterial({
         map: contactShadowTexture(),
@@ -754,7 +697,6 @@ export class EarringsSystem {
     this.left.add(this._leftShadow);
     this.right.add(this._rightShadow);
   }
-
 
   _applyMaterialOverride(mat) {
     if (!this._matOverrides) return mat;
@@ -784,8 +726,6 @@ export class EarringsSystem {
     return target;
   }
 
-  /** Combined opacity = yaw fade × tracking presence. Also toggles per-side
-      visibility so fully-faded earrings skip rendering. */
   _applyOpacity() {
     const lo = this._leftFade * this._presence;
     const ro = this._rightFade * this._presence;
@@ -795,13 +735,12 @@ export class EarringsSystem {
     this.right.visible = ro > 0.02;
   }
 
- 
   applyPresence(tracked, dtSeconds, lostMs) {
     const dt = THREE.MathUtils.clamp(dtSeconds, 0, 0.05);
     if (!tracked && lostMs > 2000) {
       this._presence = 0;
     } else {
-      const dur = tracked ? 0.3 : 0.2; // fade-in slower than fade-out
+      const dur = tracked ? 0.3 : 0.2;
       const step = dt / dur;
       const target = tracked ? 1 : 0;
       this._presence = this._presence < target
@@ -900,14 +839,10 @@ export class EarringsSystem {
       pitch: 0.25,
       roll: 0.85,
     });
-    // Per-side One Euro on rotation (separate state, same head input).
+
     const rotL = this._leftRot.filter(dampedPose, dtSeconds);
     const rotR = this._rightRot.filter(dampedPose, dtSeconds);
-    // Far-side fade from the matrix-derived yaw — smooth opacity ramp
-    // between FADE_START_DEG and FADE_END_DEG instead of a hard toggle.
-    // RAW yaw straight from the transform matrix — no smoothing, so the fade
-    // reacts with zero latency. Position/rotation still use the One Euro
-    // filtered pose; this raw read drives visibility ONLY.
+
     let yawDeg;
     if (poseMatrix && poseMatrix.length === 16) {
       poseMatrixToThree(poseMatrix, _poseM);
@@ -917,7 +852,7 @@ export class EarringsSystem {
     } else {
       yawDeg = THREE.MathUtils.radToDeg(headPose?.yaw ?? 0);
     }
-    
+
     const fadeFor = (deg) =>
       THREE.MathUtils.clamp((fadeEndDeg - deg) / (fadeEndDeg - fadeStartDeg), 0, 1);
     let leftFadeTarget = fadeFor(-yawDeg);
@@ -951,8 +886,7 @@ export class EarringsSystem {
         const dzCR = rightCheek.z - nose.z;
         const distCR = Math.sqrt(dxCR * dxCR + dyCR * dyCR + dzCR * dzCR);
         const ratioCheek = distCL / distCR;
-        // Loose limits — this check exists for hands/phones covering an ear;
-        // it must NOT trigger on ordinary head movement.
+
         const JAW_LIMIT = 0.30;
         const CHEEK_LIMIT = 0.30;
         this._occludedLeft = false;
@@ -967,9 +901,7 @@ export class EarringsSystem {
         }
       }
     }
-    
-    // Center-zone fade: hide both earrings as the face leaves the central
-    // tracking zone (measured at the eye-corner midpoint, normalized frame).
+
     if (landmarks && landmarks.length >= 468) {
       const eL = landmarks[33], eR = landmarks[263];
       if (eL && eR) {
@@ -986,8 +918,7 @@ export class EarringsSystem {
     this._leftFade = leftFadeTarget;
     this._rightFade = rightFadeTarget;
     this._applyOpacity();
-    // Both ratios foreshorten off-axis, so measure only near-frontal and
-    // otherwise hold the last good value.
+
     if (landmarks && Math.abs(yawDeg) < SHAPE_MAX_YAW_DEG &&
         Math.abs(THREE.MathUtils.radToDeg(headPose?.pitch ?? 0)) < SHAPE_MAX_PITCH_DEG) {
       const shape = measureFaceShape(landmarks, view?.videoW, view?.videoH);
@@ -1000,11 +931,10 @@ export class EarringsSystem {
     }
     this._applyShape();
 
-    // ear = (lobe + per-product hang offset) × pose matrix
     let leftTarget, rightTarget;
     if (poseMatrix && poseMatrix.length === 16) {
       poseMatrixToThree(poseMatrix, _poseM);
-      // Kept so a calibration tap can map a screen point back to head-local.
+
       this._poseWorld.copy(_poseM);
       this._havePose = true;
 
@@ -1016,7 +946,6 @@ export class EarringsSystem {
       rightTarget = new THREE.Vector3(lobeR.x + oL.lateral, lobeR.y - oL.down, lobeR.z - (oL.back + skin)).applyMatrix4(_poseM);
     }
     if (!leftTarget || !rightTarget) {
-      // No matrix this frame — freeze at the last smoothed position.
       leftTarget = this._leftPos.value.clone();
       rightTarget = this._rightPos.value.clone();
     }
@@ -1025,25 +954,22 @@ export class EarringsSystem {
     this.left.position.copy(leftPos);
     this.right.position.copy(rightPos);
     if (this._lobeOccL && this._lobeOccR) {
-      // Behind the stud along the head's backward axis (full raw rotation,
-      // extracted above for the yaw fade).
       _occBack.set(0, 0.2, -LOBE_OCC_BACK_CM).applyQuaternion(_yawQuat);
       this._lobeOccL.position.copy(leftPos).add(_occBack);
       this._lobeOccR.position.copy(rightPos).add(_occBack);
     }
     if (POSITION_DEBUG && this._dbgRed) {
-      this._dbgRed.position.copy(leftTarget); // raw matrix projection (offsets are 0)
-      this._dbgBlue.position.copy(leftPos);   // after One Euro smoothing
+      this._dbgRed.position.copy(leftTarget);
+      this._dbgBlue.position.copy(leftPos);
     }
     if (this._type !== "dangle") {
-      // Hoops & studs: rigid, full yaw-follow, no physics.
       const eL = new THREE.Euler().setFromQuaternion(rotL, "YXZ");
       const eR = new THREE.Euler().setFromQuaternion(rotR, "YXZ");
       this.left.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), eL.y);
       this.right.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), eR.y);
     } else {
     const dt = Math.min(0.03, Math.max(0.001, dtSeconds));
-   
+
     if (this._prevLeftTarget.lengthSq() < 1e-6) this._prevLeftTarget.copy(leftTarget);
     if (this._prevRightTarget.lengthSq() < 1e-6) this._prevRightTarget.copy(rightTarget);
     const leftVelX = (leftTarget.x - this._prevLeftTarget.x) / dt;
@@ -1071,8 +997,7 @@ export class EarringsSystem {
     const K = this._dangle.stiffness;
     const C = this._dangle.damping;
     const inertiaScale = this._dangle.response;
-    // Dead zone: ignore tiny acceleration (sensor noise) so the spring isn't
-    // kicked while the head is still.
+
     const deadZone = this._dangle.accelDeadZone ?? 0;
     if (Math.hypot(leftAccelX, leftAccelY) < deadZone) { leftAccelX = 0; leftAccelY = 0; }
     if (Math.hypot(rightAccelX, rightAccelY) < deadZone) { rightAccelX = 0; rightAccelY = 0; }
@@ -1093,7 +1018,7 @@ export class EarringsSystem {
     this._leftSwingVelY = Math.max(-MAX_VEL, Math.min(MAX_VEL, this._leftSwingVelY));
     this._rightSwingVelX = Math.max(-MAX_VEL, Math.min(MAX_VEL, this._rightSwingVelX));
     this._rightSwingVelY = Math.max(-MAX_VEL, Math.min(MAX_VEL, this._rightSwingVelY));
-    // Clamp swing and kill outward velocity at the limit.
+
     const MAX_SWING = THREE.MathUtils.degToRad(this._dangle.maxSwingDeg);
     const clampSwing = (angle, vel) => {
       if (angle > MAX_SWING) return [MAX_SWING, Math.min(0, vel)];
@@ -1104,7 +1029,7 @@ export class EarringsSystem {
     [this._leftSwingY, this._leftSwingVelY] = clampSwing(this._leftSwingY, this._leftSwingVelY);
     [this._rightSwingX, this._rightSwingVelX] = clampSwing(this._rightSwingX, this._rightSwingVelX);
     [this._rightSwingY, this._rightSwingVelY] = clampSwing(this._rightSwingY, this._rightSwingVelY);
-    // Base rotation: world-down hang, only head yaw (scaled by yawFollow).
+
     const yawFollow = this._dangle.yawFollow;
     const eulerL = new THREE.Euler().setFromQuaternion(rotL, "YXZ");
     const eulerR = new THREE.Euler().setFromQuaternion(rotR, "YXZ");
@@ -1118,9 +1043,7 @@ export class EarringsSystem {
       if (this._leftSwingGroup) this._leftSwingGroup.rotation.set(this._leftSwingY, 0, this._leftSwingX, "YXZ");
       if (this._rightSwingGroup) this._rightSwingGroup.rotation.set(this._rightSwingY, 0, this._rightSwingX, "YXZ");
     }
-    
-    // Fixed metric size — the perspective camera handles apparent size with
-    // distance automatically. arFit.scale (this._fitScale) tunes per model.
+
     const metricScale = EARRING_METRIC_SIZE * this._fitScale;
     this.left.scale.setScalar(metricScale);
     this.right.scale.setScalar(metricScale);

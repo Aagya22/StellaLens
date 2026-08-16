@@ -11,8 +11,6 @@ export async function connectDatabase(): Promise<void> {
   await mongoose.connect(env.MONGODB_URI, { serverSelectionTimeoutMS: 10_000 });
 }
 
-/** 1 = connected. Checked before accepting an order so we never tell a
-    customer their request was received when it wasn't stored. */
 export function isDatabaseReady(): boolean {
   return mongoose.connection.readyState === 1;
 }

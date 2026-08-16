@@ -52,6 +52,7 @@ export default function ConfirmDialog({
 
   if (!mounted) return null;
 
+  // Portalled: the navbar's backdrop-filter would trap a fixed child inside it.
   return createPortal(
     <AnimatePresence>
       {isOpen && (

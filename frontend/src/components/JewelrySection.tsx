@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { PRODUCTS, Product } from '@/data/products';
+import ProductImage from '@/components/ProductImage';
 
-/** Numeric value of a "$1,250" price string, for sorting */
 const priceValue = (p: Product) => Number(p.price.replace(/[^0-9.]/g, '')) || 0;
 
 interface JewelrySectionProps {
@@ -25,7 +26,7 @@ export default function JewelrySection({
 }: JewelrySectionProps) {
   const [justAdded, setJustAdded] = useState<string | null>(null);
   const addToBag = (product: Product) => {
-    if (!onAddToCart(product)) return; // sign-in opened; nothing was added
+    if (!onAddToCart(product)) return;
     setJustAdded(product.id);
     setTimeout(() => setJustAdded((id) => (id === product.id ? null : id)), 1600);
   };
@@ -139,27 +140,39 @@ export default function JewelrySection({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-16 justify-center justify-items-center relative z-10">
-          {sorted.map((product) => (
-            <div key={product.id} className="group flex flex-col items-center text-center gap-4 animate-fade-in max-w-[220px] w-full min-w-0 mx-auto">
-              <div className="relative w-full aspect-square bg-[#ffffff] border border-black/5 flex items-center justify-center transition-all duration-300 group-hover:border-[#c5a880]/30 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)]">
+          {sorted.map((product, i) => (
+            <motion.div
+              key={product.id}
+              layout
+              initial={{ opacity: 0, y: 26 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-60px' }}
+
+              transition={{ duration: 0.55, delay: (i % 4) * 0.07, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ y: -6 }}
+              className="group flex flex-col items-center text-center gap-4 max-w-[220px] w-full min-w-0 mx-auto">
+              <div className="relative w-full aspect-square overflow-hidden bg-[#ffffff] border border-black/5 flex items-center justify-center transition-all duration-300 group-hover:border-[#c5a880]/30 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)]">
                 <div className="absolute top-3 left-3 w-3 h-3 pointer-events-none" style={{ borderTop: '1px solid rgba(197,168,128,0.25)', borderLeft: '1px solid rgba(197,168,128,0.25)' }} />
                 <div className="absolute top-3 right-3 w-3 h-3 pointer-events-none" style={{ borderTop: '1px solid rgba(197,168,128,0.25)', borderRight: '1px solid rgba(197,168,128,0.25)' }} />
                 <div className="absolute bottom-3 left-3 w-3 h-3 pointer-events-none" style={{ borderBottom: '1px solid rgba(197,168,128,0.25)', borderLeft: '1px solid rgba(197,168,128,0.25)' }} />
                 <div className="absolute bottom-3 right-3 w-3 h-3 pointer-events-none" style={{ borderBottom: '1px solid rgba(197,168,128,0.25)', borderRight: '1px solid rgba(197,168,128,0.25)' }} />
-                
-                <span className="font-editorial text-[#f2f2f2] text-[70px] select-none leading-none group-hover:text-[#c5a880]/10 transition-colors duration-500" style={{ fontFamily: "var(--font-cormorant), 'Cormorant Garamond', serif" }}>
-                  {product.name.charAt(0)}
-                </span>
-                
-                <div className="absolute inset-0 flex items-center justify-center opacity-30 group-hover:opacity-80 transition-all duration-500 transform group-hover:scale-105">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--gold)">
-                    <path d="M12 0c.7 6.4 5.1 11 12 12-6.9 1-11.3 5.6-12 12-.7-6.4-5.1-11-12-12 6.9-1 11.3-5.6 12-12z" />
-                  </svg>
-                </div>
+
+                <ProductImage
+                  product={product}
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-[0.22,1,0.36,1] group-hover:scale-[1.06]"
+                />
+
+                {!product.image && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-30 group-hover:opacity-80 transition-all duration-500 transform group-hover:scale-105">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--gold)">
+                      <path d="M12 0c.7 6.4 5.1 11 12 12-6.9 1-11.3 5.6-12 12-.7-6.4-5.1-11-12-12 6.9-1 11.3-5.6 12-12z" />
+                    </svg>
+                  </div>
+                )}
               </div>
 
               <div className="w-full min-w-0 flex flex-col items-center gap-1 mt-2">
-                <h3 
+                <h3
                   className="tracking-wide font-normal"
                   style={{
                     fontFamily: "var(--font-jost), sans-serif",
@@ -172,7 +185,7 @@ export default function JewelrySection({
                 >
                   {product.name}
                 </h3>
-                
+
                 <p
                   className="font-light italic truncate w-full"
                   style={{
@@ -223,7 +236,7 @@ export default function JewelrySection({
                   </button>
                 )}
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>

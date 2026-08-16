@@ -54,7 +54,6 @@ function landmarkAt(landmarks, index) {
   return p;
 }
 
-
 let consolePatched = false;
 function muteMediapipeInfoLogs() {
   if (consolePatched || typeof console === "undefined") return;
@@ -75,11 +74,11 @@ export class FaceTracker {
     this._ready = false;
     this._lastGoodMatrix = null;
     this._lastTs = 0;
-    // Multi-face primary selection + hysteresis
-    this._primaryCenter = null; // {x,y} bbox centre of the currently tracked face
+
+    this._primaryCenter = null;
     this._primaryArea = 0;
-    this._lastSwitchMs = 0;     // when we last switched primary face
-    this._multiWarnMs = 0;      // throttle the multi-face warning
+    this._lastSwitchMs = 0;
+    this._multiWarnMs = 0;
   }
 
   _faceMetrics(landmarks) {
@@ -93,7 +92,6 @@ export class FaceTracker {
     return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, area: (maxX - minX) * (maxY - minY) };
   }
 
-  
   _selectPrimary(faces, nowMs) {
     let largest = faces[0];
     for (const f of faces) if (f.area > largest.area) largest = f;
@@ -113,12 +111,12 @@ export class FaceTracker {
 
     let chosen;
     if (nearest === largest) {
-      chosen = largest; // face we're tracking is still the biggest
+      chosen = largest;
     } else if (nowMs - this._lastSwitchMs > 500 && largest.area > nearest.area * 1.15) {
-      chosen = largest; // a different face has been clearly bigger long enough
+      chosen = largest;
       this._lastSwitchMs = nowMs;
     } else {
-      chosen = nearest; // stick with the tracked face (hysteresis)
+      chosen = nearest;
     }
     this._primaryCenter = { x: chosen.cx, y: chosen.cy };
     this._primaryArea = chosen.area;
@@ -140,7 +138,7 @@ export class FaceTracker {
           delegate: "GPU",
         },
         runningMode: "VIDEO",
-        numFaces: 2, // detect up to 2 so we can pick the largest and ignore bystanders
+        numFaces: 2,
         outputFaceBlendshapes: false,
         outputFacialTransformationMatrixes: true,
       });
@@ -161,10 +159,9 @@ export class FaceTracker {
 
   detect(video, nowMs) {
     if (!this._landmarker || !this._ready) return null;
-    // A frame with no dimensions (camera warming up / stream ended) crashes the graph.
+
     if (!video || video.videoWidth === 0 || video.videoHeight === 0) return null;
 
-    // detectForVideo requires strictly increasing timestamps per instance.
     const ts = Math.max(nowMs, this._lastTs + 1);
     this._lastTs = ts;
 
@@ -172,7 +169,6 @@ export class FaceTracker {
     try {
       mpResult = this._landmarker.detectForVideo(video, ts);
     } catch (err) {
-      // WASM-side failure (closed graph, bad frame) — skip this frame instead of crashing the loop.
       console.warn('FaceTracker: skipped frame —', err?.message ?? err);
       return null;
     }
@@ -180,7 +176,6 @@ export class FaceTracker {
     const allFaces = mpResult.faceLandmarks;
     if (!allFaces || allFaces.length === 0) return null;
 
-    // Multi-face rejection: track only the primary (largest, with hysteresis).
     let faceLandmarks, facialMatrix;
     if (allFaces.length === 1) {
       faceLandmarks = allFaces[0];

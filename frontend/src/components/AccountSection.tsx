@@ -176,7 +176,6 @@ export default function AccountSection({
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_390px] gap-8 lg:gap-12 items-start">
             <div className="flex flex-col gap-7">
-              {/* ── Details ── */}
               <div style={{ ...card, padding: '28px 26px 26px' }}>
                 <SectionHead step="01" title="Your details" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -187,7 +186,6 @@ export default function AccountSection({
                 </div>
               </div>
 
-              {/* ── Ear fitting ── */}
               <div style={{ ...card, padding: '28px 26px 26px' }}>
                 <SectionHead
                   step="02"
@@ -230,7 +228,6 @@ export default function AccountSection({
                 )}
               </div>
 
-              {/* ── Orders ── */}
               <div style={{ ...card, padding: '28px 26px 26px' }}>
                 <SectionHead step="03" title="Your orders" note="Everything you have ordered from us" />
                 {orders === null ? (
@@ -271,7 +268,6 @@ export default function AccountSection({
               </div>
             </div>
 
-            {/* ── Bag ── */}
             <div style={{ ...card, padding: '28px 26px 26px' }} className="relative lg:sticky lg:top-[110px]">
               <CornerMarks />
               <SectionHead step="04" title="Your bag" />

@@ -12,9 +12,7 @@ import { api, ApiError, AuthUser, EarCalibration } from '@/lib/api';
 
 interface AuthContextValue {
   user: AuthUser | null;
-  /** True until the initial session check finishes — don't decide anything
-      about who this is before it flips, or you'll flash a signed-out UI at
-      someone who is signed in. */
+
   loading: boolean;
   register: (input: { name: string; email: string; password: string }) => Promise<void>;
   login: (input: { email: string; password: string }) => Promise<void>;
@@ -29,13 +27,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore the session from the cookie on first load.
   useEffect(() => {
     let cancelled = false;
     api
       .get<{ user: AuthUser }>('/api/auth/me')
       .then((res) => { if (!cancelled) setUser(res.user); })
-      .catch(() => { if (!cancelled) setUser(null); }) // 401 = simply signed out
+      .catch(() => { if (!cancelled) setUser(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
@@ -54,7 +51,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.post('/api/auth/logout');
     } catch {
-      /* signing out locally matters more than the request succeeding */
     }
     setUser(null);
   }, []);

@@ -50,7 +50,6 @@ authRouter.post(
     try {
       user = await UserModel.create({ name, email, passwordHash });
     } catch (err) {
-
       if ((err as { code?: number }).code === 11000) {
         throw new HttpError(409, 'An account with that email already exists', {
           email: 'An account with that email already exists',

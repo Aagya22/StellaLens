@@ -25,7 +25,6 @@ export function signToken(userId: string): string {
   } as SignOptions);
 }
 
-
 export function setAuthCookie(res: Response, token: string): void {
   res.cookie(AUTH_COOKIE, token, {
     httpOnly: true,
@@ -53,7 +52,7 @@ async function userFromRequest(req: Request): Promise<UserDocument | null> {
   try {
     payload = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
   } catch {
-    return null; // expired, tampered with, or signed by something else
+    return null;
   }
 
   return UserModel.findById(payload.sub);
@@ -64,7 +63,6 @@ export async function attachUser(req: Request, _res: Response, next: NextFunctio
     const user = await userFromRequest(req);
     if (user) req.user = user;
   } catch {
-    /* a lookup failure is not the caller's problem — treat as signed out */
   }
   next();
 }
@@ -73,7 +71,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   try {
     const user = req.user ?? (await userFromRequest(req));
     if (!user) {
-      clearAuthCookie(res); // stale cookie — stop the browser resending it
+      clearAuthCookie(res);
       return next(new HttpError(401, 'Please sign in to continue'));
     }
     req.user = user;

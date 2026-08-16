@@ -2,8 +2,7 @@ export interface CatalogItem {
   id: string;
   name: string;
   category: 'earrings' | 'necklaces' | 'rings' | 'bracelets';
-  /** Paisa. Named "minor" rather than "paisa" so switching currency later
-      doesn't leave a misnamed field behind. */
+
   priceMinor: number;
 }
 
@@ -11,6 +10,7 @@ export const CURRENCY = 'NPR';
 export const CURRENCY_SYMBOL = 'Rs';
 export const CURRENCY_DECIMALS = 0;
 
+// Prices live here, never on the client. Orders send productId + quantity only.
 export const CATALOG: Record<string, CatalogItem> = {
   earring_diamond: { id: 'earring_diamond', name: 'Astraea Diamond Drops', category: 'earrings', priceMinor: 125_000 },
   earring_gold_hoop: { id: 'earring_gold_hoop', name: 'Lunette Golden Hoops', category: 'earrings', priceMinor: 65_000 },
@@ -18,7 +18,6 @@ export const CATALOG: Record<string, CatalogItem> = {
   earring_anarkali: { id: 'earring_anarkali', name: 'Anarkali Drops', category: 'earrings', priceMinor: 105_000 },
   earring_raflesia: { id: 'earring_raflesia', name: 'Raflesia Two-Layer Drops', category: 'earrings', priceMinor: 118_000 },
   necklace_orlaith: { id: 'necklace_orlaith', name: 'Orlaith Celestial Chain', category: 'necklaces', priceMinor: 180_000 },
-  necklace_locket: { id: 'necklace_locket', name: 'Luna Locket', category: 'necklaces', priceMinor: 115_000 },
   necklace_vega: { id: 'necklace_vega', name: 'Vega Beaded Necklace', category: 'necklaces', priceMinor: 125_000 },
   ring_polaris: { id: 'ring_polaris', name: 'Polaris Solitaire', category: 'rings', priceMinor: 240_000 },
   ring_rosanna: { id: 'ring_rosanna', name: 'Rosanna Pavé Band', category: 'rings', priceMinor: 160_000 },

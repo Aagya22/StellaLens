@@ -76,14 +76,12 @@ export type OrderDocument = HydratedDocument<Order>;
 
 export const OrderModel = model('Order', orderSchema);
 
-/** Short, unambiguous, and sortable by time: SL-<base36 time>-<random>. */
 export function generateReference(): string {
   const stamp = Date.now().toString(36).toUpperCase();
   const salt = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `SL-${stamp}-${salt}`;
 }
 
-/** What may be returned to the customer who placed it. */
 export function publicOrder(order: OrderDocument) {
   return {
     reference: order.reference,

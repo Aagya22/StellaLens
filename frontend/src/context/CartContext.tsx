@@ -35,7 +35,7 @@ export interface CartLine extends CartItem {
 }
 
 const MAX_QUANTITY = 10;
-/** Long enough to collapse a burst of quantity taps into one write. */
+
 const SAVE_DEBOUNCE_MS = 500;
 
 export const CURRENCY_SYMBOL = 'Rs';
@@ -85,20 +85,21 @@ interface CartContextValue {
   lines: CartLine[];
   count: number;
   subtotalMinor: number;
-  /** False until the account's bag has been fetched, so the badge doesn't flash 0. */
+
   ready: boolean;
-  /** True while a change is on its way to the server. */
+
   saving: boolean;
-  /** Returns false when nobody is signed in — the caller decides what to show. */
+
   add: (productId: string, customizations?: Customizations, quantity?: number) => boolean;
   setQuantity: (key: string, quantity: number) => void;
   remove: (key: string) => void;
-  /** `persist: false` for a bag the server has already emptied, e.g. after checkout. */
+
   clear: (options?: { persist?: boolean }) => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+// The bag lives on the account, not the browser.
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -112,8 +113,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
 
-  /* Whose bag is currently in state. Guards a save from landing on the wrong
-     account when someone signs out mid-flight. */
   const ownerId = useRef<string | null>(null);
 
   const flush = useCallback(async () => {
@@ -163,7 +162,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     [scheduleSave]
   );
 
-  // Load the signed-in account's bag; empty it the moment nobody is signed in.
   useEffect(() => {
     if (authLoading) return;
 
@@ -196,7 +194,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [user, authLoading]);
 
-  // A pending change must not be lost to a tab close.
   useEffect(() => {
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, []);

@@ -6,7 +6,6 @@ const MODEL_URL =
 const WASM_BASE_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 
-
 export class HandTracker {
   constructor() {
     this._landmarker = null;
@@ -26,8 +25,7 @@ export class HandTracker {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
         runningMode: "VIDEO",
         numHands: 1,
-        // Defaults (0.5) hallucinate "hands" in background clutter — the
-        // jewelry then tracks curtains. Demand real confidence.
+
         minHandDetectionConfidence: 0.7,
         minHandPresenceConfidence: 0.7,
         minTrackingConfidence: 0.6,
@@ -45,7 +43,6 @@ export class HandTracker {
     this._ready = true;
   }
 
-  /** Returns { landmarks, handedness } for the tracked hand, or null. */
   detect(video, nowMs) {
     if (!this._landmarker || !this._ready) return null;
     if (!video || video.videoWidth === 0 || video.videoHeight === 0) return null;
@@ -62,7 +59,7 @@ export class HandTracker {
     if (!landmarks || landmarks.length < 21) return null;
     return {
       landmarks,
-      // Metric 3D (meters, image-aligned axes) — reliable z for orientation.
+
       worldLandmarks: res.worldLandmarks?.[0] ?? null,
       handedness: res.handednesses?.[0]?.[0]?.categoryName ?? "Unknown",
     };

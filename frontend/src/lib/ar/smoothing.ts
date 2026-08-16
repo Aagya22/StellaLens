@@ -44,12 +44,6 @@ export class SmoothVec3 {
   }
 }
 
-/* ─────────────────────────────────────────────────────────────
-   One Euro Filter — standard face-AR smoothing.
-   Filters jitter hard at low velocity but follows fast motion
-   with little lag (adaptive cutoff = minCutoff + beta·|velocity|).
-────────────────────────────────────────────────────────────── */
-
 class LowPass {
   constructor() {
     this.initialized = false;
@@ -141,7 +135,7 @@ export class OneEuroQuat {
       this._prevTarget.copy(q);
       return this.value;
     }
-    // Angular velocity between consecutive raw targets (radians/s)
+
     const dot = Math.min(1, Math.abs(q.dot(this._prevTarget)));
     const angVel = (2 * Math.acos(dot)) / Math.max(1e-4, dt);
     this._prevTarget.copy(q);

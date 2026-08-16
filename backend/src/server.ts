@@ -20,7 +20,7 @@ app.use(
       if (corsOrigins.includes(origin)) return callback(null, true);
       callback(new Error(`Origin ${origin} is not allowed`));
     },
-    credentials: true, // the session cookie has to cross origins
+    credentials: true,
   })
 );
 app.use(express.json({ limit: '100kb' }));
@@ -51,7 +51,6 @@ async function start() {
     await connectDatabase();
     console.info('[db] connected');
   } catch (err) {
-    // Refuse to start rather than accept orders with nowhere to put them.
     console.error('[db] could not connect:', (err as Error).message);
     process.exit(1);
   }

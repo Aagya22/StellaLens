@@ -24,7 +24,6 @@ interface ARViewProps {
   onOpenOrderModal: (customizations: any) => void;
 }
 
-
 const EARRING_FIT = {
   offsetX: 0,
   offsetY: 0,
@@ -33,10 +32,7 @@ const EARRING_FIT = {
   smoothingFactor: 0.55,
 };
 
-
 const WEBCAM_VFOV_DEG = 63;
-
-
 
 const CAMERA_ZOOM = 1.1;
 
@@ -77,7 +73,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
   const [activeProduct, setActiveProduct] = useState(product);
   useEffect(() => { setActiveProduct(product); }, [product]);
-  useEffect(() => { setMetalTone('gold'); }, [activeProduct]); // model reloads on gold
+  useEffect(() => { setMetalTone('gold'); }, [activeProduct]);
 
   const [calibEar, setCalibEar] = useState<'userRight' | 'userLeft'>('userRight');
   const [, setCalibTick] = useState(0);
@@ -132,22 +128,21 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     startLobeCalibration();
   }, [activeProduct, loadingMsg, authLoading, user]);
 
-
   useEffect(() => {
     if (activeProduct.category === 'earrings') {
       const onKey = (e: KeyboardEvent) => {
         const anchor = earringsRef.current?.getAnchor();
         if (!anchor) return;
-        const step = 0.1 * (e.shiftKey ? 4 : 1); // centimeters
+        const step = 0.1 * (e.shiftKey ? 4 : 1);
         const o = anchor[calibEar];
         let handled = true;
         switch (e.key.toLowerCase()) {
-          case 'a': o.lateral -= step; break; // toward face center
-          case 'd': o.lateral += step; break; // outward
-          case 'w': o.down    -= step; break; // up
-          case 's': o.down    += step; break; // down
-          case 'r': o.back    -= step; break; // toward camera
-          case 'f': o.back    += step; break; // behind face plane
+          case 'a': o.lateral -= step; break;
+          case 'd': o.lateral += step; break;
+          case 'w': o.down    -= step; break;
+          case 's': o.down    += step; break;
+          case 'r': o.back    -= step; break;
+          case 'f': o.back    += step; break;
           case 't': setCalibEar(prev => (prev === 'userRight' ? 'userLeft' : 'userRight')); break;
           default: handled = false;
         }
@@ -167,16 +162,16 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       const onKey = (e: KeyboardEvent) => {
         const anchor = necklacesRef.current?.getAnchor();
         if (!anchor?.pivotOffset) return;
-        const step = 0.1 * (e.shiftKey ? 4 : 1); // centimeters
+        const step = 0.1 * (e.shiftKey ? 4 : 1);
         const o = anchor.pivotOffset;
         let handled = true;
         switch (e.key.toLowerCase()) {
           case 'a': o.x -= step; break;
           case 'd': o.x += step; break;
-          case 'w': anchor.dropCm -= step; break; // chain up (body frame)
-          case 's': anchor.dropCm += step; break; // chain down (body frame)
-          case 'r': o.z += step; break; // pivot toward camera
-          case 'f': o.z -= step; break; // pivot behind face plane
+          case 'w': anchor.dropCm -= step; break;
+          case 's': anchor.dropCm += step; break;
+          case 'r': o.z += step; break;
+          case 'f': o.z -= step; break;
           case 'z': anchor.widthCm -= step * 2.5; break;
           case 'x': anchor.widthCm += step * 2.5; break;
           case 'n':
@@ -187,12 +182,12 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             if (activeProduct.necklaceStyle === 'pendant') anchor.pendantCm = (anchor.pendantCm ?? 4) + step;
             else anchor.lengthCm = (anchor.lengthCm || anchor.widthCm) + step * 2.5;
             break;
-          case 'c': anchor.forwardCm -= step; break; // chain toward the spine
-          case 'v': anchor.forwardCm += step; break; // chain out onto the skin
-          case 'g': anchor.occRxCm -= step; break;   // occluder narrower
-          case 'h': anchor.occRxCm += step; break;   // occluder wider (side reach)
-          case 'j': anchor.occRzCm -= step; break;   // occluder shallower
-          case 'k': anchor.occRzCm += step; break;   // occluder deeper (front/back)
+          case 'c': anchor.forwardCm -= step; break;
+          case 'v': anchor.forwardCm += step; break;
+          case 'g': anchor.occRxCm -= step; break;
+          case 'h': anchor.occRxCm += step; break;
+          case 'j': anchor.occRzCm -= step; break;
+          case 'k': anchor.occRzCm += step; break;
           case 'b': necklacesRef.current?.toggleOccluderDebug(); break;
           default: handled = false;
         }
@@ -211,12 +206,12 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         const step = 0.05 * (e.shiftKey ? 4 : 1);
         let handled = true;
         switch (e.key.toLowerCase()) {
-          case 'z': fit.sizeCm = Math.max(0.4, fit.sizeCm - step); break; // smaller
-          case 'x': fit.sizeCm += step; break;                            // bigger
-          case 'w': fit.alongT = Math.max(0, fit.alongT - 0.03); break;   // toward knuckle
-          case 's': fit.alongT = Math.min(1, fit.alongT + 0.03); break;   // toward joint
-          case 'r': fit.liftCm += step; break; // lift off the skin (toward camera)
-          case 'f': fit.liftCm -= step; break; // seat into the finger
+          case 'z': fit.sizeCm = Math.max(0.4, fit.sizeCm - step); break;
+          case 'x': fit.sizeCm += step; break;
+          case 'w': fit.alongT = Math.max(0, fit.alongT - 0.03); break;
+          case 's': fit.alongT = Math.min(1, fit.alongT + 0.03); break;
+          case 'r': fit.liftCm += step; break;
+          case 'f': fit.liftCm -= step; break;
           default: handled = false;
         }
         if (handled) { e.preventDefault(); setCalibTick(t => t + 1); }
@@ -241,10 +236,9 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     let active = true;
     let renderer: THREE.WebGLRenderer | null = null;
     let scene: THREE.Scene | null = null;
-    let camera: THREE.PerspectiveCamera | null = null; // metric 3D camera for ALL categories
+    let camera: THREE.PerspectiveCamera | null = null;
     let vfovDeg = WEBCAM_VFOV_DEG;
 
-    // Live FOV tuning for the perspective camera.
     const onFovKey = (e: KeyboardEvent) => {
       if (!camera) return;
       if (e.key === '[') vfovDeg = Math.max(20, vfovDeg - 1);
@@ -264,16 +258,15 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
       if (px < 0 || py < 0 || px > rect.width || py > rect.height) return;
-      // Undo `scaleX(-1) scale(CAMERA_ZOOM)`, which is applied about the centre.
+
       const lx = -(px - rect.width / 2) / CAMERA_ZOOM + rect.width / 2;
       const ly = (py - rect.height / 2) / CAMERA_ZOOM + rect.height / 2;
-      // Undo object-cover, landing in render-buffer pixels.
+
       const bx = (lx - view.cover.offsetX) / view.cover.scale;
       const by = (ly - view.cover.offsetY) / view.cover.scale;
       const ndcX = (bx / view.videoW) * 2 - 1;
       const ndcY = -((by / view.videoH) * 2 - 1);
-      // The view is mirrored, so the user's LEFT ear is on the display's left,
-      // which is +x (screenRight) in the unmirrored frame the engine renders.
+
       const side = step === 1 ? 'screenRight' : 'screenLeft';
       const saved = earringsRef.current?.calibrateLobeFromTap({ side, ndcX, ndcY, camera });
       if (!saved) {
@@ -306,7 +299,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         });
       });
     };
-
 
     const updateView = () => {
       if (!containerRef.current || !videoRef.current) return;
@@ -341,7 +333,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           setLoadingMsg('Camera not supported in this browser. Try Safari (iOS) or Chrome (Android).');
           return;
         }
-        
+
         let stream: MediaStream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
@@ -370,17 +362,17 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         if (!canvas) throw new Error('Canvas not found');
         renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
         renderer.localClippingEnabled = true;
-        // Cap DPR at 2 — 3x phone displays would otherwise render 9× the pixels.
+
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.setClearColor(0x000000, 0);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
-        //  Neutral keeps the gold gold.
+
         renderer.toneMapping = THREE.NeutralToneMapping;
         renderer.toneMappingExposure = 1.0;
         scene = new THREE.Scene();
         const pmrem = new THREE.PMREMGenerator(renderer);
         scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-        
+
         scene.environmentIntensity = 1.15;
 
         const ambient = new THREE.AmbientLight(0xffffff, 0.25); scene.add(ambient); ambientRef.current = ambient;
@@ -396,7 +388,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         window.addEventListener('keydown', onFovKey);
         window.addEventListener('pointerdown', onStagePointer);
 
-
         const isRing = activeProduct.category === 'rings';
         const isBracelet = activeProduct.category === 'bracelets';
         const isHand = isRing || isBracelet;
@@ -406,7 +397,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
         if (!active) { tracker.dispose(); return; }
         trackerRef.current = tracker;
-
 
         const gltfLoader = new GLTFLoader();
         earringsRef.current  = new EarringsSystem({ scene, gltfLoader, onStatus: (msg: string) => { if (active && msg) setLoadingMsg(msg); } });
@@ -418,8 +408,8 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         setLoadingMsg('Loading 3D Product...');
         earringsRef.current.setVisible(activeProduct.category === 'earrings');
         necklacesRef.current.setVisible(activeProduct.category === 'necklaces');
-        ringsRef.current.setVisible(false);     // shown when a hand is detected
-        braceletsRef.current.setVisible(false); // shown when a hand is detected
+        ringsRef.current.setVisible(false);
+        braceletsRef.current.setVisible(false);
         if (activeProduct.category === 'earrings') await earringsRef.current.loadModel(activeProduct.modelPath, { singleEarring: activeProduct.pair === true, preserveMaterials: activeProduct.preserveMaterials === true, anchor: activeProduct.earAnchor, dangle: activeProduct.dangle, fit: activeProduct.arFit, materials: activeProduct.arMaterials, skinPenetration: activeProduct.skinPenetration, contactShadow: activeProduct.contactShadow, type: activeProduct.arType, fixedNodes: activeProduct.fixedNodes, pairMirror: activeProduct.pairMirror });
         else if (activeProduct.category === 'necklaces') await necklacesRef.current.loadModel(activeProduct.modelPath, { anchor: activeProduct.necklaceAnchor, scale: activeProduct.arFit?.scale, rotationFix: activeProduct.arFit?.rotationDeg, preserveMaterials: activeProduct.preserveMaterials === true, style: activeProduct.necklaceStyle, stripNodes: activeProduct.necklaceStrip } as any);
         else if (activeProduct.category === 'rings') await ringsRef.current.loadModel(activeProduct.modelPath, { fit: activeProduct.ringFit, scale: activeProduct.arFit?.scale, rotationFix: activeProduct.arFit?.rotationDeg, preserveMaterials: activeProduct.preserveMaterials === true } as any);
@@ -427,10 +417,9 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         setLoadingMsg('');
 
         let lastNow = performance.now(), lastVideoTime = -1, lastDetectionMs = 0, lastDet: any = null, frameCount = 0, trackingLostMs = 0;
-        // User-guidance state (earrings): centred / still / unobstructed.
+
         let guidePrevX = -1, guidePrevY = -1, guideSpeed = 0, occludedMs = 0, lastGuide = '';
-        // Tier-2 body fit (necklaces): one-time shoulder measurement, then
-        // the pose model shuts down and the face-only pipeline runs alone.
+
         let bodyFit: any = null; // BodyFitSession (its module is @ts-nocheck)
         let bodyFitStatus = '';
         const publishBodyFit = (s: any) => setBodyFitInfo({
@@ -447,17 +436,16 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           });
         }
         const leftEarAnchor = EarAnchor.defaultLeft(), rightEarAnchor = EarAnchor.defaultRight();
-        // One small offscreen canvas (64×64) for ALL scene-lighting sampling —
-        // never the full camera frame. Throttled harder on mobile.
+
         const offscreenCanvas = document.createElement('canvas'); offscreenCanvas.width = 64; offscreenCanvas.height = 64;
         const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
         const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
-        const SAMPLE_EVERY = isMobile ? 6 : 3; // frames between lighting samples
-        const BASE_ENV = 1.15;    // matches scene.environmentIntensity at init
-        const REF_SKIN_LUM = 0.6; // skin luminance considered "well lit"
-        let lightBiasSmooth = 0;  // -1..1, ~30-frame running avg (light direction)
-        let warmthSmooth = 1.35;  // R/B ratio, ~90-frame avg (colour temperature)
-        let envMulSmooth = 1;     // env-intensity multiplier, ~90-frame avg
+        const SAMPLE_EVERY = isMobile ? 6 : 3;
+        const BASE_ENV = 1.15;
+        const REF_SKIN_LUM = 0.6;
+        let lightBiasSmooth = 0;
+        let warmthSmooth = 1.35;
+        let envMulSmooth = 1;
 
         const loop = (now: number) => {
           if (!active) { bodyFit?.dispose(); bodyFit = null; return; }
@@ -468,7 +456,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             frameCount++;
             if (bodyFit && bodyFit.done === false) {
               bodyFit.sample(video, now);
-              // Repaint only when something actually changes, not per frame.
+
               const tag = `${bodyFit.status}:${bodyFit.samples}`;
               if (tag !== bodyFitStatus) { bodyFitStatus = tag; publishBodyFit(bodyFit); }
               if (bodyFit.done) {
@@ -482,7 +470,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 offscreenCtx.drawImage(video, 0, 0, 64, 64);
                 const data = offscreenCtx.getImageData(0, 0, 64, 64).data;
 
-                // Overall luminance → existing light-intensity adaptation
                 let sumL = 0;
                 for (let i = 0; i < data.length; i += 4) sumL += (0.2126 * data[i] + 0.7152 * data[i+1] + 0.0722 * data[i+2]) / 255;
                 const avg = sumL / (64 * 64);
@@ -490,7 +477,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 if (keyRef.current)     keyRef.current.intensity     = THREE.MathUtils.lerp(keyRef.current.intensity,     THREE.MathUtils.lerp(0.70, 2.00, avg), 0.08);
                 if (fillRef.current)    fillRef.current.intensity    = THREE.MathUtils.lerp(fillRef.current.intensity,    THREE.MathUtils.lerp(0.30, 1.10, avg), 0.08);
 
-                // Face-relative sampling (uses last frame's landmarks — 1 frame old is fine)
                 const lm = lastDet?.landmarks;
                 if (lm && lm.length >= 468) {
                   const rgbAt = (idx: number) => {
@@ -502,33 +488,29 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                     return [data[o], data[o + 1], data[o + 2]] as const;
                   };
 
-                  // (#1) Light direction from left/right cheek brightness
                   const lc = rgbAt(234), rc = rgbAt(454);
                   if (lc && rc) {
                     const lb = 0.2126 * lc[0] + 0.7152 * lc[1] + 0.0722 * lc[2];
                     const rb = 0.2126 * rc[0] + 0.7152 * rc[1] + 0.0722 * rc[2];
-                    const bias = (rb - lb) / (rb + lb + 1e-3);       // >0 = right side brighter
-                    lightBiasSmooth += (bias - lightBiasSmooth) / 30; // ~30-frame running avg
-                    if (keyRef.current) keyRef.current.position.x = 200 + lightBiasSmooth * 350; // subtle
+                    const bias = (rb - lb) / (rb + lb + 1e-3);
+                    lightBiasSmooth += (bias - lightBiasSmooth) / 30;
+                    if (keyRef.current) keyRef.current.position.x = 200 + lightBiasSmooth * 350;
                   }
 
-                  // (#3/#4) Skin tone → colour temperature + scene brightness
                   const skin = [rgbAt(10), rgbAt(234), rgbAt(454), rgbAt(152)].filter(Boolean) as (readonly number[])[];
                   if (skin.length) {
                     let r = 0, g = 0, b = 0;
                     for (const c of skin) { r += c[0]; g += c[1]; b += c[2]; }
                     r /= skin.length; g /= skin.length; b /= skin.length;
 
-                    // (#3) warmth: R/B ratio, heavily smoothed (~90 frames)
                     warmthSmooth += (r / (b + 1e-3) - warmthSmooth) / 90;
                     const warmT = THREE.MathUtils.clamp((warmthSmooth - 1.1) / 0.6, 0, 1);
                     if (ambientRef.current) ambientRef.current.color.setRGB(
-                      THREE.MathUtils.lerp(0.90, 1.00, warmT),   // cool → warm R
-                      THREE.MathUtils.lerp(0.94, 0.95, warmT),   // G ~flat
-                      THREE.MathUtils.lerp(1.00, 0.88, warmT)    // cool → warm B
+                      THREE.MathUtils.lerp(0.90, 1.00, warmT),
+                      THREE.MathUtils.lerp(0.94, 0.95, warmT),
+                      THREE.MathUtils.lerp(1.00, 0.88, warmT)
                     );
 
-                    // (#4) reflection intensity by scene brightness (~90 frames)
                     const skinLum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
                     envMulSmooth += (THREE.MathUtils.clamp(skinLum / REF_SKIN_LUM, 0.15, 1.0) - envMulSmooth) / 90;
                     if (scene) scene.environmentIntensity = BASE_ENV * envMulSmooth;
@@ -551,8 +533,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 braceletsRef.current?.setVisible(true);
                 braceletsRef.current?.update({ hand: det, view, dtSeconds });
               }
-              // User guidance: when the face is off-centre, moving fast, or
-              // an ear is covered, HIDE the jewelry 
+
               let guide = '';
               if (activeProduct.category === 'earrings') {
                 const eL = det.landmarks[33], eR = det.landmarks[263];
@@ -561,7 +542,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                   if (Math.abs(cx - 0.5) > 0.16 || Math.abs(cy - 0.5) > 0.30) guide = 'Center your face in the oval';
                   if (guidePrevX >= 0 && dtSeconds > 0) {
                     const v = Math.hypot(cx - guidePrevX, cy - guidePrevY) / dtSeconds;
-                    guideSpeed += (v - guideSpeed) * 0.25; // ~4-frame smoothing
+                    guideSpeed += (v - guideSpeed) * 0.25;
                     if (!guide && guideSpeed > 0.45) guide = 'Hold still for a moment';
                   }
                   guidePrevX = cx; guidePrevY = cy;
@@ -574,7 +555,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 }
               }
               if (guide !== lastGuide) { lastGuide = guide; setGuideMsg(guide); }
-              // Face re-found: restore visibility (cleared on dropout below).
+
               earringsRef.current?.setVisible(activeProduct.category === 'earrings' && !guide);
               necklacesRef.current?.setVisible(activeProduct.category === 'necklaces');
               const headPose = estimateHeadPose(det.poseMatrix), poseQuat = headPose.quaternion;
@@ -587,10 +568,9 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               } else if (activeProduct.category === 'necklaces' && necklacesRef.current) {
                 necklacesRef.current.update({ landmarks: det.landmarks, headPose, dtSeconds });
               }
-              // Ramp presence up (fade back in) while tracked.
+
               earringsRef.current?.applyPresence(true, dtSeconds, 0);
             } else {
-   
               trackingLostMs += dtSeconds * 1000;
               earringsRef.current?.applyPresence(false, dtSeconds, trackingLostMs);
               necklacesRef.current?.setVisible(false);
@@ -630,13 +610,12 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
   }, [activeProduct]);
 
   useEffect(() => {
-    if (!gemsTouched.current) return; // don't repaint authored materials on mount
+    if (!gemsTouched.current) return;
     if (activeProduct.category === 'earrings' && earringsRef.current) {
       earringsRef.current.setGemColors(topGemColor, bottomGemColor);
     }
   }, [topGemColor, bottomGemColor, activeProduct]);
 
-  /* Composite the mirrored camera frame + AR canvas into a PNG download. */
   const takeSnapshot = () => {
     const video = videoRef.current, canvas = canvasRef.current;
     if (!video || !canvas || !video.videoWidth) return;
@@ -645,9 +624,9 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     out.width = w; out.height = h;
     const ctx = out.getContext('2d');
     if (!ctx) return;
-    ctx.translate(w, 0); ctx.scale(-1, 1); // same mirror as the live view
+    ctx.translate(w, 0); ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, w, h);
-    ctx.drawImage(canvas, 0, 0, w, h);     // AR canvas renders at video res
+    ctx.drawImage(canvas, 0, 0, w, h);
     const a = document.createElement('a');
     a.download = `stellalens-${activeProduct.id}.png`;
     a.href = out.toDataURL('image/png');
@@ -697,7 +676,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       className="fixed inset-0 z-50 flex flex-col md:flex-row overflow-hidden"
       style={{ background: 'var(--cream, #ffffff)' }}
     >
-      {/* ── Try-on rail: switch pieces without leaving the AR view ── */}
       <div
         className="hidden md:flex flex-col items-center gap-3 px-4 py-6"
         style={{ borderRight: '1px solid var(--cream-border)' }}
@@ -733,7 +711,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         })}
       </div>
 
-      {/* ── Portrait camera stage ── */}
       <div className="relative flex-1 flex items-center justify-center min-h-0 p-3 md:p-5">
         <div
           ref={containerRef}
@@ -758,8 +735,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           style={{ transform: `scaleX(-1) scale(${CAMERA_ZOOM})` }}
         />
 
-        {/* ── Dashed centering guide — appears ONLY while re-centering is
-            needed (earrings), otherwise the viewport stays clean. ── */}
         {activeProduct.category === 'earrings' && !loadingMsg && guideMsg.startsWith('Center') && (
           <div
             className="absolute pointer-events-none"
@@ -771,7 +746,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           />
         )}
 
-        {/* ── Two-tap earlobe calibration prompt ── */}
+        {}
         {calibStep > 0 && (
           <div
             className="absolute inset-x-0 bottom-0 z-30 flex flex-col items-center gap-2 pointer-events-none"
@@ -784,7 +759,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.7)',
               }}
             >
-              {/* Mirrored view — "your left" is on the left of the screen. */}
               Tap your {calibStep === 1 ? 'LEFT' : 'RIGHT'} earlobe
             </span>
             <span
@@ -812,7 +786,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           </div>
         )}
 
-        {/* ── Live guidance: shown while the jewelry is hidden on purpose ── */}
+        {}
         {guideMsg && !loadingMsg && (
           <div
             className="absolute left-1/2 -translate-x-1/2 z-20"
@@ -883,9 +857,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           Back
         </button>
 
-
-
-        {/* ── Control pill: metal tone (necklaces) + snapshot ── */}
         <div
           className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3"
           style={{
@@ -932,8 +903,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         </div>
         </div>
 
-        {/* ── TEMPORARY calibration readouts — outside the camera card,
-            in the stage's white space (dev tool, removed at ship) ── */}
         {activeProduct.category === 'necklaces' && (() => {
           const anchor = necklacesRef.current?.getAnchor();
           const o = anchor?.pivotOffset;
@@ -1013,7 +982,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         })()}
       </div>
 
-      {/* ── Product panel — landing-page theme ── */}
       <div
         className="w-full md:w-[360px] flex flex-col overflow-y-auto"
         style={{
@@ -1083,7 +1051,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           </p>
         </div>
 
-        {/* Fitting is fixed by the calibrated anchors — no manual sliders */}
         <div className="flex-1" />
 
         <div className="px-8 pb-8 flex flex-col gap-3">

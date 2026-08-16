@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useCart, formatMoney, MAX_QUANTITY, CartLine } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import ProductImage from '@/components/ProductImage';
 import { api, ApiError } from '@/lib/api';
 
 interface CheckoutConfig {
@@ -161,8 +162,7 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
         })),
       });
       setPlaced(res.order);
-      // The server empties the account's bag as part of placing the order —
-      // writing an empty one back would only race with it.
+
       clear({ persist: false });
       toast({
         kind: 'success',
@@ -264,7 +264,6 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_390px] gap-8 lg:gap-12 items-start">
             <div className="flex flex-col gap-7">
-              {/* ── Items ── */}
               <div style={{ ...card, padding: '28px 26px 8px' }}>
                 <SectionHead step="01" title="Your pieces" />
                 <div className="flex flex-col">
@@ -279,7 +278,6 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
                   ))}
                 </div>
               </div>
-
 
               <form onSubmit={placeOrder} className="flex flex-col gap-7" id="checkout-form">
                   <div style={{ ...card, padding: '28px 26px' }}>
@@ -335,7 +333,6 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
                 </form>
             </div>
 
-            {/* ── Summary ── */}
             <aside className="w-full lg:sticky lg:top-28 flex flex-col gap-4">
               <div style={{ ...card, padding: '0', overflow: 'hidden' }} className="relative">
                 <div
@@ -404,7 +401,6 @@ export default function CheckoutSection({ activeTab, onBrowse, onSignInClick }: 
                 </div>
               </div>
 
-              {/* Reassurance, in the site's voice rather than generic badges */}
               <div style={{ ...card, padding: '18px 20px', boxShadow: 'none' }} className="flex flex-col gap-3">
                 <Assurance title="No payment now" text="We confirm the final quote with you before any charge." />
                 <Assurance title="Made to order" text={config ? `Delivered in ${config.estimatedDays}.` : 'Crafted for you after confirmation.'} />
@@ -478,7 +474,7 @@ function CartRow({
           border: '1px solid rgba(179,146,94,0.22)',
         }}
       >
-        <img src={line.product.image} alt={line.product.name} className="w-full h-full object-cover" />
+        <ProductImage product={line.product} fallbackSize={38} />
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">

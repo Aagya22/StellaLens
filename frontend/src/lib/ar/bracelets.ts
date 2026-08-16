@@ -3,21 +3,15 @@ import * as THREE from "three";
 import { OneEuroVec3, OneEuroQuat, OneEuro } from "./smoothing";
 import { disposeObject3D, autoOrientHole, normalizeModelToUnit } from "./rings";
 
-/* Bracelet engine — the ring engine's principles moved to the wrist.
-
-   ANCHOR: wrist landmark (0), pushed slightly toward the forearm along the
-   hand's axis (a bracelet rests below the wrist crease, not on the palm).
-   SIZE: the model's measured HOLE = measured wrist width × loose (a real
-   bangle hangs a little loose — never skin-tight, never huge).
-   WRAP: elliptical depth-only cylinder along the forearm axis — wrists are
-   flat, not round. */
+// Roll is view-stabilized, not hand-relative: a loose bangle stays put while
+// the arm turns inside it, which also removes left/right chirality.
 export const BRACELET_FIT = {
-  loose: 1.15,        // hole = wrist width × this ("a little loose")
-  offsetCm: 2.0,      // below the wrist crease, toward the forearm
-  wristCm: 5.6,       // fallback wrist width when world landmarks missing
+  loose: 1.15,
+  offsetCm: 2.0,
+  wristCm: 5.6,
 };
 
-const KNUCKLE_SPAN_CM = 6.5; // canonical index-MCP ↔ pinky-MCP distance
+const KNUCKLE_SPAN_CM = 6.5;
 const MP_VERTICAL_FOV_DEG = 63;
 const B_FADE_EDGE = 0.06;
 
@@ -46,16 +40,14 @@ export class BraceletSystem {
     this._fit = { ...BRACELET_FIT };
     this._fitScale = 1;
     this._holeR = 0.4;
-    // View-aligned cutting plane — only the FRONT portion renders (the
-    // production wristwear-AR technique).
+
     this._clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 1000);
-    // Steady when held still, still responsive on deliberate motion.
+
     this._pos = new OneEuroVec3({ minCutoff: 0.5, beta: 0.15 });
     this._quat = new OneEuroQuat({ minCutoff: 0.5, beta: 0.3 });
     this._wristW = new OneEuro({ minCutoff: 0.3, beta: 0.02 });
     this._fade = 0;
 
-    // Elliptical wrist occluder (depth-only): rx across the wrist, rz thin.
     this._wristOccluder = new THREE.Mesh(
       new THREE.CylinderGeometry(1, 1, 1, 20, 1),
       new THREE.MeshBasicMaterial({
@@ -84,7 +76,7 @@ export class BraceletSystem {
     try {
       const gltf = await this.loader.loadAsync(modelPath);
       const root = gltf.scene;
-      // Strip authored display props (pillows, stands) BEFORE normalization.
+
       if (Array.isArray(stripNodes) && stripNodes.length) {
         const pats = stripNodes.map((s) => String(s).toLowerCase());
         const doomed = [];
@@ -171,9 +163,7 @@ export class BraceletSystem {
     if (!lm || lm.length < 21) return;
     const wrist = lm[0], midMcp = lm[9], idx = lm[5], pinky = lm[17];
     if (!wrist || !midMcp || !idx || !pinky) return;
-    // A half-out-of-frame hand gives extrapolated garbage landmarks — the
-    // bracelet then floats mid-forearm with a wrong axis. Require the key
-    // landmarks genuinely in frame or show nothing.
+
     for (const p of [wrist, midMcp, idx, pinky]) {
       if (p.x < 0.01 || p.x > 0.99 || p.y < 0.01 || p.y > 0.99) {
         this._applyOpacity(0);
@@ -182,8 +172,6 @@ export class BraceletSystem {
     }
     const vw = view?.videoW || 640, vh = view?.videoH || 480;
 
-    // Depth from the knuckle span, with a VIEW-PERPENDICULAR world ruler so
-    // an angled hand doesn't read as "far away" (see rings.ts).
     const spanPx = Math.hypot((idx.x - pinky.x) * vw, (idx.y - pinky.y) * vh);
     if (spanPx < 15) return;
     const halfH = Math.tan(THREE.MathUtils.degToRad(MP_VERTICAL_FOV_DEG / 2));
@@ -197,34 +185,27 @@ export class BraceletSystem {
     const d = THREE.MathUtils.clamp((spanCm * focalPx) / spanPx, 8, 120);
     this._unproject(wrist, d, vw, vh, _wrist);
 
-    // AXIS from the hand (wrist → middle knuckle, metric world landmarks —
-    // image-aligned axes → negate y/z). ROLL is VIEW-STABILIZED, not
-    // hand-relative: a loose bangle doesn't spin when the wrist pronates —
-    // it stays put while the arm turns inside it. This is what makes the
-    // bracelet feel steady under any hand twist, and it removes left/right
-    // chirality from the problem entirely.
     const w = hand.worldLandmarks;
     if (w && w.length >= 21) {
       _dir.set(w[9].x - w[0].x, -(w[9].y - w[0].y), -(w[9].z - w[0].z)).normalize();
     } else {
       _dir.set((midMcp.x - wrist.x) * vw, -(midMcp.y - wrist.y) * vh, 0).normalize();
     }
-    // Camera-facing component perpendicular to the axis → stable roll.
-    _normal.copy(_wrist).multiplyScalar(-1).normalize();      // toward camera
+
+    _normal.copy(_wrist).multiplyScalar(-1).normalize();
     _normal.addScaledVector(_dir, -_dir.dot(_normal)).normalize();
     _side.copy(_dir).cross(_normal).normalize();
     _basis.makeBasis(_side, _dir, _normal);
     _quatRaw.setFromRotationMatrix(_basis);
 
     const f = this._fit;
-    _pos.copy(_wrist).addScaledVector(_dir, -f.offsetCm); // toward the forearm
+    _pos.copy(_wrist).addScaledVector(_dir, -f.offsetCm);
 
     const pos = this._pos.filter(_pos, dtSeconds);
     const quat = this._quat.filter(_quatRaw, dtSeconds);
     this.group.position.copy(pos);
     this.group.quaternion.copy(quat);
 
-    // Wrist width from the metric knuckle span (wrist ≈ 0.85 × span).
     let wristW = f.wristCm;
     if (w && w.length >= 21) {
       const raw = Math.hypot(w[5].x - w[17].x, w[5].y - w[17].y, w[5].z - w[17].z) * 100 * 0.85;
@@ -234,23 +215,15 @@ export class BraceletSystem {
     const s = ((wristW * f.loose) / (2 * Math.max(0.12, this._holeR))) * this._fitScale;
     this.group.scale.setScalar(Math.max(0.001, s));
 
-    // Limb occluder: the bangle physically ENCIRCLES the forearm, so the
-    // limb's radius ≈ hole ÷ looseness. Round (the forearm below the wrist
-    // crease is round, not flat) and nearly hole-filling — the far side of
-    // the band cannot peek over it at oblique angles — yet always capped
-    // inside the hole so it never swallows the band itself.
     const limbR = Math.min((this._holeR * s) / (f.loose || 1.15) * 0.98, this._holeR * s - 0.08);
     const r = Math.max(0.3, limbR);
     this._wristOccluder.position.copy(pos);
     this._wristOccluder.quaternion.copy(quat);
     this._wristOccluder.scale.set(r, 10, r);
 
-    // Cutting plane at the equator: exactly the front half renders — the
-    // arc ends at the arm's silhouette and reads as encircling it.
-    _clipN.copy(pos).multiplyScalar(-1).normalize(); // toward the camera
+    _clipN.copy(pos).multiplyScalar(-1).normalize();
     this._clipPlane.setFromNormalAndCoplanarPoint(_clipN, pos);
 
-    // Edge fade.
     const edge = Math.min(wrist.x, 1 - wrist.x, wrist.y, 1 - wrist.y);
     const fade = THREE.MathUtils.clamp(edge / B_FADE_EDGE, 0, 1);
     this._fade = fade;

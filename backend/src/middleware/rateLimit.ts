@@ -1,11 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import { HttpError } from './errorHandler';
 
-
 export function rateLimit({ windowMs, max }: { windowMs: number; max: number }) {
   const hits = new Map<string, { count: number; resetAt: number }>();
 
-  // Drop expired buckets so a long-running process doesn't grow unbounded.
   const sweep = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of hits) {

@@ -108,7 +108,7 @@ export default function Home() {
   const [pending, setPending] = useState<PendingAction | null>(null);
 
   const requireAccount = useCallback((action: PendingAction): boolean => {
-    if (authLoading) return false; // still checking — a moment, not a refusal
+    if (authLoading) return false;
     if (user) return true;
     setPending(action);
     setAuthModalOpen(true);
@@ -184,8 +184,8 @@ export default function Home() {
       className="min-h-screen w-full flex flex-col overflow-x-hidden relative"
       style={{ background: 'var(--black)', color: 'var(--header-text)', fontFamily: "var(--font-jost), 'Jost', sans-serif" }}
     >
-      <div 
-        className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-300 opacity-60 hidden md:block" 
+      <div
+        className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-300 opacity-60 hidden md:block"
         style={{
           background: 'radial-gradient(550px circle at var(--mouse-x, -999px) var(--mouse-y, -999px), rgba(255, 255, 255, 0.42) 0%, transparent 80%)'
         }}
@@ -272,12 +272,12 @@ export default function Home() {
                 animate={{ opacity: 0.8 }}
                 transition={{ delay: 1.1, duration: 1.0 }}
               >
-                <svg 
-                  width="16" 
-                  height="10" 
-                  viewBox="0 0 14 8" 
-                  fill="none" 
-                  stroke="#ffffff" 
+                <svg
+                  width="16"
+                  height="10"
+                  viewBox="0 0 14 8"
+                  fill="none"
+                  stroke="#ffffff"
                   strokeWidth="1.2"
                   className="animate-bounce"
                 >
@@ -332,7 +332,7 @@ export default function Home() {
                       viewport={{ once: true, margin: "-50px" }}
                       transition={{ duration: 0.8, delay: idx * 0.12, ease: [0.22, 1, 0.36, 1] }}
                     >
-                      <div 
+                      <div
                         className="relative w-full aspect-[4/5] overflow-hidden rounded-none border border-black/5 bg-neutral-50 transition-all duration-500 group-hover:shadow-[0_24px_50px_rgba(107,11,20,0.06)]"
                         style={{
                           boxShadow: '0 4px 15px rgba(107,11,20,0.015)'
@@ -343,7 +343,7 @@ export default function Home() {
                           alt={col.title}
                           className="w-full h-full object-cover transition-transform duration-700 ease-[0.22,1,0.36,1] group-hover:scale-106"
                         />
-                        
+
                         {col.id === 'rings' && (
                           <div className="absolute bottom-4 right-5 text-right leading-tight z-20 pointer-events-none">
                             <p className="text-[9px] tracking-widest uppercase font-semibold text-[#c5a880]">MOST</p>
@@ -370,17 +370,17 @@ export default function Home() {
               className="relative w-full overflow-hidden flex flex-col items-center justify-center"
               style={{ background: '#000000', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
             >
-              <div 
-                className="absolute top-0 right-0 w-[450px] h-[450px] rounded-full pointer-events-none z-0" 
-                style={{ 
-                  background: 'radial-gradient(circle, rgba(255,255,255,0.045) 0%, transparent 70%)', 
-                  transform: 'translate(20%, -20%)' 
-                }} 
+              <div
+                className="absolute top-0 right-0 w-[450px] h-[450px] rounded-full pointer-events-none z-0"
+                style={{
+                  background: 'radial-gradient(circle, rgba(255,255,255,0.045) 0%, transparent 70%)',
+                  transform: 'translate(20%, -20%)'
+                }}
               />
 
               <div className="relative w-full max-w-7xl mx-auto px-6 sm:px-12 py-28 lg:py-36 z-10">
                 <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-[72px]">
-                  
+
                   <motion.div
                     className="w-full lg:w-[46%] flex flex-col items-start text-left gap-5"
                     initial={{ opacity: 0, x: -30 }}
@@ -388,7 +388,7 @@ export default function Home() {
                     viewport={{ once: true }}
                     transition={{ duration: 1.0, ease: [0.22, 1, 0.36, 1] }}
                   >
-                    <span 
+                    <span
                       className="uppercase tracking-[0.3em] text-[9px] font-bold text-[#c5a880] mb-1"
                     >
                       Featured Masterpiece
@@ -399,13 +399,13 @@ export default function Home() {
                     >
                       The Luminous<br />Astraea Earrings
                     </h2>
-                    <p 
+                    <p
                       className="text-xs sm:text-[13px] font-light leading-relaxed max-w-md"
-                      style={{ 
-                        color: 'rgba(255,255,255,0.65)', 
-                        fontFamily: "var(--font-jost), sans-serif", 
-                        letterSpacing: '0.03em', 
-                        lineHeight: '1.75' 
+                      style={{
+                        color: 'rgba(255,255,255,0.65)',
+                        fontFamily: "var(--font-jost), sans-serif",
+                        letterSpacing: '0.03em',
+                        lineHeight: '1.75'
                       }}
                     >
                       A breathtaking display of artisan excellence, featuring hand-selected pear-cut blue sapphires and brilliant diamond clusters set in a cascade of 18k white gold. These earrings represent the pinnacle of Stella Lens's design heritage.
@@ -434,11 +434,11 @@ export default function Home() {
                     transition={{ duration: 1.0, ease: [0.22, 1, 0.36, 1] }}
                   >
                     <div className="relative w-full max-w-[480px]">
-                      <div 
-                        className="absolute -bottom-3 -left-3 w-32 h-32 border-b border-l pointer-events-none z-0" 
+                      <div
+                        className="absolute -bottom-3 -left-3 w-32 h-32 border-b border-l pointer-events-none z-0"
                         style={{ borderColor: 'rgba(197, 168, 128, 0.35)', borderWidth: '1px' }}
                       />
-                      
+
                       <div className="relative w-full aspect-square overflow-hidden rounded-none border border-white/10 bg-[#060814] shadow-2xl z-10">
                         <img
                           src="/images/earrings1.png"
@@ -482,13 +482,13 @@ export default function Home() {
                     The Lens Visualization
                   </h2>
 
-                  <p 
+                  <p
                     className="text-xs sm:text-[13px] font-light leading-relaxed max-w-lg"
-                    style={{ 
+                    style={{
                       color: '#000000',
-                      fontFamily: "var(--font-jost), sans-serif", 
-                      letterSpacing: '0.03em', 
-                      lineHeight: '1.75' 
+                      fontFamily: "var(--font-jost), sans-serif",
+                      letterSpacing: '0.03em',
+                      lineHeight: '1.75'
                     }}
                   >
                     Experience the future of high jewellery through our exclusive AR suite. &ldquo;The Lens&rdquo; allows you to visualize every facet of your selection in your own environment, ensuring a perfect union between stone and wearer.
@@ -530,11 +530,11 @@ export default function Home() {
                   transition={{ duration: 1.0, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <div className="relative w-full max-w-[480px]">
-                    <div 
-                      className="absolute -top-3 -left-3 w-32 h-32 border-t border-l pointer-events-none z-0" 
+                    <div
+                      className="absolute -top-3 -left-3 w-32 h-32 border-t border-l pointer-events-none z-0"
                       style={{ borderColor: 'rgba(74, 64, 56, 0.15)', borderWidth: '1px' }}
                     />
-                    
+
                     <div className="relative w-full aspect-square overflow-hidden rounded-none border border-black/5 bg-[#f6f6f6] shadow-2xl z-10">
                       <img
                         src="/images/image copy.png"
@@ -621,8 +621,7 @@ export default function Home() {
           product={activeArProduct}
           onClose={() => setActiveArProduct(null)}
           onOpenOrderModal={(details: any) => {
-            // AR now feeds the bag rather than its own one-off order form, so
-            // there is a single path to placing an order.
+            // AR feeds the bag, so there is one path to placing an order.
             const product = PRODUCTS.find((p) => p.id === details.productId);
             setActiveArProduct(null);
             if (product && requestAddToCart(product, details.customizations ?? {})) {

@@ -34,7 +34,6 @@ export default function RootLayout({
       className={`${cormorant.variable} ${jost.variable} h-full`}
     >
       <body className="min-h-full flex flex-col">
-        {/* Toasts outermost: both the session and the bag report through them. */}
         <ToastProvider>
           <AuthProvider>
             <CartProvider>{children}</CartProvider>

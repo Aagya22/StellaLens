@@ -11,19 +11,9 @@ function rad2deg(r) {
   return (r * 180) / Math.PI;
 }
 
-/**
- * Load MediaPipe's facial transformation matrix into a THREE.Matrix4,
- * detecting the memory layout at runtime instead of trusting docs.
- *
- * The transform is rigid: its true last row is [0,0,0,1] and its
- * translation z is tens of centimeters (face in front of the camera), so:
- *   row-major    → tz sits at data[11]
- *   column-major → tz sits at data[14]
- * three.js stores column-major, so a row-major source needs a transpose.
- * Getting this wrong inverts the rotation (looks fine ONLY at frontal
- * pose) and zeroes the translation.
- */
 let _layoutLogged = false;
+// three.js is column-major. A row-major source needs a transpose, and getting
+// it wrong inverts the rotation while looking correct at frontal pose.
 export function poseMatrixToThree(data, target) {
   const rowMajor = Math.abs(data[11]) > Math.abs(data[14]);
   target.fromArray(data);
@@ -37,7 +27,6 @@ export function poseMatrixToThree(data, target) {
   }
   return target;
 }
-
 
 export function estimateHeadPose(poseMatrixArray) {
   if (!poseMatrixArray || poseMatrixArray.length !== 16) {
@@ -83,7 +72,6 @@ export function estimateHeadPose(poseMatrixArray) {
     scale,
   };
 }
-
 
 export function dampHeadPoseQuaternion(headPoseQuat, { yaw = 0.7, pitch = 0.25, roll = 0.85 } = {}) {
   const e = new THREE.Euler().setFromQuaternion(headPoseQuat, "YXZ");

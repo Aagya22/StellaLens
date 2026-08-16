@@ -6,14 +6,12 @@ const MODEL_URL =
 const WASM_BASE_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 
-
-/* The calibrating user's own measurement, so their fit is ×1.00 and the tuned
-   numbers in products.ts are true canonical values rather than their body's. */
+// One person's measurement, so everyone else scales relative to them.
 const BASELINE_NOSE_TO_SHOULDER_CM = 18.3;
 const CANONICAL_INTEROCULAR_CM = 9.0;
 const SAMPLES_NEEDED = 24;
-const MAX_MS = 10000;      // give up politely if shoulders never come into view
-const LOAD_MAX_MS = 20000; // give up on the model download rather than hang
+const MAX_MS = 10000;
+const LOAD_MAX_MS = 20000;
 const MIN_VISIBILITY = 0.7;
 
 const SAMPLE_INTERVAL_MS = 80;
@@ -27,16 +25,15 @@ export class BodyFitSession {
     this._measureStartedMs = 0;
     this._lastSampleMs = 0;
     this._lastTs = 0;
-    this._result = null;   // 'ok' | 'no-shoulders' | 'unavailable'
+    this._result = null;
     this._medianCm = null;
-    this.scale = 1; // result: multiplier for dropCm / occluder dims
+    this.scale = 1;
   }
 
   get done() {
     return this._done;
   }
 
-  /** 'loading' | 'measuring' | 'ok' | 'no-shoulders' | 'unavailable' */
   get status() {
     if (this._done) return this._result ?? "unavailable";
     return this._landmarker ? "measuring" : "loading";
@@ -64,18 +61,16 @@ export class BodyFitSession {
     }
   }
 
-  /** Feed a video frame. Returns true while more samples are wanted. */
   sample(video, nowMs) {
     if (this._done) return false;
-    // Clock starts on the first frame, NOT once the model has loaded — a
-    // download that never resolves used to sit here silently forever.
+
     if (!this._startedMs) this._startedMs = nowMs;
     if (!this._landmarker) {
       if (nowMs - this._startedMs > LOAD_MAX_MS) this._finish("unavailable");
       return true;
     }
     if (!video || video.videoWidth === 0) return true;
-    // Measuring gets its own budget, so a slow download doesn't eat it.
+
     if (!this._measureStartedMs) this._measureStartedMs = nowMs;
     if (nowMs - this._measureStartedMs > MAX_MS) {
       this._finish("timeout");
@@ -102,7 +97,7 @@ export class BodyFitSession {
     if (iodPx < 20) return true;
     const cmPerPx = CANONICAL_INTEROCULAR_CM / iodPx;
     const noseShoulderCm = (((shL.y + shR.y) / 2) - nose.y) * vh * cmPerPx;
-    if (noseShoulderCm < 12 || noseShoulderCm > 45) return true; // junk frame
+    if (noseShoulderCm < 12 || noseShoulderCm > 45) return true;
     this._samples.push(noseShoulderCm);
     if (this._samples.length >= SAMPLES_NEEDED) {
       this._finish("ok");
@@ -114,7 +109,6 @@ export class BodyFitSession {
   _finish(reason) {
     this._done = true;
     if (this._samples.length >= 8) {
-      // Median — robust to the odd junk frame.
       const s = [...this._samples].sort((a, b) => a - b);
       this._medianCm = s[Math.floor(s.length / 2)];
       this.scale = Math.min(1.3, Math.max(0.75, this._medianCm / BASELINE_NOSE_TO_SHOULDER_CM));
