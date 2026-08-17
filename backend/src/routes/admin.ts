@@ -5,7 +5,8 @@ import { orderStatusSchema, orderListQuerySchema } from '../schemas/admin';
 import { HttpError, asyncHandler } from '../middleware/errorHandler';
 import { rateLimit } from '../middleware/rateLimit';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import { CURRENCY } from '../data/catalog';
+import { CURRENCY, CATALOG } from '../data/catalog';
+import { UserModel } from '../models/User';
 
 export const adminRouter = Router();
 
@@ -33,6 +34,134 @@ async function statusCounts(): Promise<Record<string, number>> {
   }
   return counts;
 }
+
+const EARNING = { status: { $ne: 'cancelled' } };
+
+function daysAgo(n: number): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - n);
+  return d;
+}
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function localOffset(): string {
+  const mins = -new Date().getTimezoneOffset();
+  const sign = mins < 0 ? '-' : '+';
+  const abs = Math.abs(mins);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+}
+
+adminRouter.get(
+  '/stats',
+  asyncHandler(async (_req: Request, res: Response) => {
+    assertDatabase();
+    const since30 = daysAgo(30);
+    const since60 = daysAgo(60);
+
+    const sumRevenue = async (match: Record<string, unknown>) => {
+      const [row] = await OrderModel.aggregate<{ minor: number; n: number }>([
+        { $match: { ...EARNING, ...match } },
+        { $group: { _id: null, minor: { $sum: '$totals.totalMinor' }, n: { $sum: 1 } } },
+      ]);
+      return { minor: row?.minor ?? 0, n: row?.n ?? 0 };
+    };
+
+    const [
+      counts, allTime, last30, prev30,
+      perDayRows, pieceRows,
+      totalUsers, newUsers30, newUsers60, buyerIds,
+      recentUsers, ordersPerUser,
+    ] = await Promise.all([
+      statusCounts(),
+      sumRevenue({}),
+      sumRevenue({ createdAt: { $gte: since30 } }),
+      sumRevenue({ createdAt: { $gte: since60, $lt: since30 } }),
+      OrderModel.aggregate<{ _id: string; orders: number; minor: number }>([
+        { $match: { createdAt: { $gte: since30 } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: localOffset() } },
+            orders: { $sum: 1 },
+            minor: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 0, '$totals.totalMinor'] } },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      OrderModel.aggregate<{ _id: string; name: string; units: number; minor: number }>([
+        { $match: EARNING },
+        { $unwind: '$items' },
+        {
+          $group: {
+            _id: '$items.productId',
+            name: { $first: '$items.productName' },
+            units: { $sum: '$items.quantity' },
+            minor: { $sum: '$items.lineTotalMinor' },
+          },
+        },
+        { $sort: { units: -1, minor: -1 } },
+        { $limit: 8 },
+      ]),
+      UserModel.countDocuments({}),
+      UserModel.countDocuments({ createdAt: { $gte: since30 } }),
+      UserModel.countDocuments({ createdAt: { $gte: since60, $lt: since30 } }),
+      OrderModel.distinct('user', { user: { $ne: null } }),
+      UserModel.find({}).sort({ createdAt: -1 }).limit(8).select('name email createdAt'),
+      OrderModel.aggregate<{ _id: unknown; n: number }>([
+        { $match: { user: { $ne: null } } },
+        { $group: { _id: '$user', n: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const byDay = new Map(perDayRows.map((r) => [r._id, r]));
+    const perDay: Array<{ date: string; orders: number; revenueMinor: number }> = [];
+    for (let i = 29; i >= 0; i--) {
+      const date = dayKey(daysAgo(i));
+      const row = byDay.get(date);
+      perDay.push({ date, orders: row?.orders ?? 0, revenueMinor: row?.minor ?? 0 });
+    }
+
+    const orderCount = new Map(ordersPerUser.map((r) => [String(r._id), r.n]));
+
+    res.json({
+      currency: CURRENCY,
+      revenue: {
+        allTimeMinor: allTime.minor,
+        last30Minor: last30.minor,
+        prev30Minor: prev30.minor,
+        avgOrderMinor: allTime.n ? Math.round(allTime.minor / allTime.n) : 0,
+      },
+      orders: {
+        total: counts.all,
+        last30: last30.n,
+        prev30: prev30.n,
+        byStatus: Object.fromEntries(ORDER_STATUSES.map((s) => [s, counts[s] ?? 0])),
+      },
+      customers: {
+        total: totalUsers,
+        last30: newUsers30,
+        prev30: newUsers60,
+        withOrders: buyerIds.length,
+      },
+      perDay,
+      topPieces: pieceRows.map((row) => ({
+        productId: row._id,
+        name: CATALOG[row._id]?.name ?? row.name,
+        category: CATALOG[row._id]?.category ?? 'unknown',
+        units: row.units,
+        revenueMinor: row.minor,
+      })),
+      recentCustomers: recentUsers.map((u) => ({
+        name: u.name,
+        email: u.email,
+        createdAt: u.createdAt,
+        orders: orderCount.get(String(u._id)) ?? 0,
+      })),
+    });
+  })
+);
 
 adminRouter.get(
   '/orders',

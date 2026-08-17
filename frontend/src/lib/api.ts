@@ -68,6 +68,16 @@ export interface AdminOrderList {
   pages: number;
 }
 
+export interface AdminStats {
+  currency: string;
+  revenue: { allTimeMinor: number; last30Minor: number; prev30Minor: number; avgOrderMinor: number };
+  orders: { total: number; last30: number; prev30: number; byStatus: Record<OrderStatus, number> };
+  customers: { total: number; last30: number; prev30: number; withOrders: number };
+  perDay: Array<{ date: string; orders: number; revenueMinor: number }>;
+  topPieces: Array<{ productId: string; name: string; category: string; units: number; revenueMinor: number }>;
+  recentCustomers: Array<{ name: string; email: string; createdAt: string; orders: number }>;
+}
+
 export interface AdminOrderDetail {
   id: string;
   reference: string;

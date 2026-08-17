@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   api, ApiError, ORDER_STATUSES,
-  AdminOrderList, AdminOrderRow, AdminOrderDetail, OrderStatus,
+  AdminOrderList, AdminOrderRow, AdminOrderDetail, OrderStatus, AdminStats,
 } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { formatMoney } from '@/context/CartContext';
 import { useToast } from '@/context/ToastContext';
+import AdminDashboard from '@/components/AdminDashboard';
 
 const STATUS_TONE: Record<OrderStatus, { bg: string; fg: string }> = {
   new: { bg: 'rgba(107,11,20,0.10)', fg: 'var(--rose-deep)' },
@@ -47,6 +48,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -75,7 +77,17 @@ export default function AdminPage() {
     }
   }, [isAdmin, status, search, page]);
 
+  const loadStats = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      setStats(await api.get<AdminStats>('/api/admin/stats'));
+    } catch {
+      setStats(null);
+    }
+  }, [isAdmin]);
+
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void loadStats(); }, [loadStats]);
 
   const openOrder = async (reference: string) => {
     if (openRef === reference) { setOpenRef(null); setDetail(null); return; }
@@ -101,7 +113,7 @@ export default function AdminPage() {
       );
       setDetail(res.order);
       toast({ kind: 'success', title: 'Order updated', message: `${reference} is now ${next}.` });
-      await load();
+      await Promise.all([load(), loadStats()]);
     } catch (err) {
       toast({ kind: 'error', title: 'Could not update', message: err instanceof ApiError ? err.message : '' });
     } finally {
@@ -136,12 +148,18 @@ export default function AdminPage() {
     <Shell wide>
       <div className="flex items-baseline justify-between flex-wrap gap-3 mb-6">
         <h1 className="font-cormorant text-4xl font-semibold" style={{ color: 'var(--cream-text)' }}>
-          Orders
+          Dashboard
         </h1>
         <Link href="/" className="text-sm underline" style={{ color: 'var(--gold-bright)' }}>
           Back to the shop
         </Link>
       </div>
+
+      {stats && <AdminDashboard stats={stats} />}
+
+      <h2 className="font-cormorant text-3xl font-semibold mb-4" style={{ color: 'var(--cream-text)' }}>
+        Orders
+      </h2>
 
       <div className="flex flex-wrap gap-2 mb-4">
         {tabs.map((t) => {
