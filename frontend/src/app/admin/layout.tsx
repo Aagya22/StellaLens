@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import NotificationBell from '@/components/admin/NotificationBell';
 import {
   IconOverview, IconOrders, IconCustomers, IconPieces,
   IconShop, IconSignOut, IconGem, IconMenu, IconClose,
@@ -231,19 +232,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <div className="flex-1 min-w-0 flex flex-col">
         <header
-          className="sticky top-0 z-20 flex items-center gap-3 px-5 md:px-8 h-16"
+          className="sticky top-0 z-20 flex items-center gap-3 px-5 md:px-9 h-16"
           style={{ background: 'rgba(246,245,243,0.88)', backdropFilter: 'blur(10px)', borderBottom: '1px solid var(--admin-line)' }}
         >
           <button onClick={() => setMobileOpen(true)} aria-label="Open menu" className="md:hidden" style={{ color: 'var(--admin-ink)' }}>
             <IconMenu />
           </button>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-[0.18em]" style={{ color: 'var(--admin-muted)' }}>
               {current?.section ?? 'Admin'}
             </p>
             <h1 className="font-cormorant text-2xl font-semibold leading-none" style={{ color: 'var(--admin-ink)' }}>
               {current?.name ?? 'Admin'}
             </h1>
+          </div>
+          <div className="shrink-0">
+            <NotificationBell />
           </div>
         </header>
 

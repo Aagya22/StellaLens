@@ -103,8 +103,6 @@ export function SearchInput({
   );
 }
 
-// Always renders the range once there is anything to count — a lone page still
-// needs to say how many rows it is showing.
 export function Pager({
   page, pages, total, limit, noun, onPage,
 }: {
@@ -157,7 +155,6 @@ export function longDate(iso: string | Date): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' });
 }
 
-// A single-hue bar row: label above, value at the tip, 4px rounded data-end.
 export function BarRow({
   label, value, sub, fraction, dim,
 }: { label: string; value: string; sub?: string; fraction: number; dim?: boolean }) {

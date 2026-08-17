@@ -35,6 +35,10 @@ export const IconMenu = () => (
   <svg {...base} width={22} height={22}><path d="M4 7h16M4 12h16M4 17h16" /></svg>
 );
 
+export const IconBell = () => (
+  <svg {...base} width={19} height={19}><path d="M18 8a6 6 0 0 0-12 0c0 6-2 7-2 7h16s-2-1-2-7" /><path d="M10.5 20a1.9 1.9 0 0 0 3 0" /></svg>
+);
+
 export const IconClose = () => (
   <svg {...base} width={20} height={20}><path d="M6 6l12 12M18 6L6 18" /></svg>
 );

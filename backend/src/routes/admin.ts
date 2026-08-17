@@ -163,6 +163,44 @@ adminRouter.get(
   })
 );
 
+function seenSince(admin: { adminSeen?: { customersAt?: Date | null } | null; createdAt: Date }): Date {
+  return admin.adminSeen?.customersAt ?? admin.createdAt;
+}
+
+adminRouter.get(
+  '/notifications',
+  asyncHandler(async (req: Request, res: Response) => {
+    assertDatabase();
+    const admin = req.user!;
+    const since = seenSince(admin);
+    const filter = { _id: { $ne: admin._id }, createdAt: { $gt: since } };
+
+    const [count, items] = await Promise.all([
+      UserModel.countDocuments(filter),
+      UserModel.find(filter).sort({ createdAt: -1 }).limit(10).select('name email createdAt'),
+    ]);
+
+    res.json({
+      since,
+      customers: {
+        count,
+        items: items.map((u) => ({ id: u.id as string, name: u.name, email: u.email, createdAt: u.createdAt })),
+      },
+    });
+  })
+);
+
+adminRouter.post(
+  '/notifications/seen',
+  asyncHandler(async (req: Request, res: Response) => {
+    assertDatabase();
+    const admin = req.user!;
+    admin.set('adminSeen.customersAt', new Date());
+    await admin.save();
+    res.json({ since: admin.adminSeen?.customersAt ?? null });
+  })
+);
+
 adminRouter.get(
   '/customers',
   asyncHandler(async (req: Request, res: Response) => {

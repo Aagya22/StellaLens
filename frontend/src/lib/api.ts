@@ -68,6 +68,14 @@ export interface AdminOrderList {
   pages: number;
 }
 
+export interface AdminNotifications {
+  since: string;
+  customers: {
+    count: number;
+    items: Array<{ id: string; name: string; email: string; createdAt: string }>;
+  };
+}
+
 export interface AdminCustomer {
   id: string;
   name: string;

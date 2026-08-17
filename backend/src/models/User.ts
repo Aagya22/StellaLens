@@ -51,6 +51,10 @@ const userSchema = new Schema(
     role: { type: String, enum: ['customer', 'admin'], default: 'customer', index: true },
     earCalibration: { type: earCalibrationSchema, default: null },
     cart: { type: [cartItemSchema], default: [] },
+    // Per-admin read marker, so "new" survives signing in on another device.
+    adminSeen: {
+      customersAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
