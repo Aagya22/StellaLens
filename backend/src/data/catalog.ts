@@ -1,3 +1,5 @@
+import { ProductModel } from '../models/Product';
+
 export interface CatalogItem {
   id: string;
   name: string;
@@ -10,7 +12,6 @@ export const CURRENCY = 'NPR';
 export const CURRENCY_SYMBOL = 'Rs';
 export const CURRENCY_DECIMALS = 0;
 
-// Prices live here, never on the client. Orders send productId + quantity only.
 export const CATALOG: Record<string, CatalogItem> = {
   earring_diamond: { id: 'earring_diamond', name: 'Astraea Diamond Drops', category: 'earrings', priceMinor: 125_000 },
   earring_gold_hoop: { id: 'earring_gold_hoop', name: 'Lunette Golden Hoops', category: 'earrings', priceMinor: 65_000 },
@@ -34,6 +35,29 @@ export const SHIPPING = {
 };
 
 export const MAX_QUANTITY_PER_ITEM = 10;
+export async function resolveCatalog(
+  options: { includeUnlisted?: boolean } = {}
+): Promise<Record<string, CatalogItem>> {
+  const filter = options.includeUnlisted ? {} : { status: 'active' };
+  const merged: Record<string, CatalogItem> = { ...CATALOG };
+
+  try {
+    const rows = await ProductModel.find(filter).lean();
+    for (const row of rows) {
+      if (merged[row.productId]) continue;
+      merged[row.productId] = {
+        id: row.productId,
+        name: row.name,
+        category: row.category,
+        priceMinor: row.priceMinor,
+      };
+    }
+  } catch (err) {
+    console.warn('[catalog] could not load added pieces:', (err as Error).message);
+  }
+
+  return merged;
+}
 
 export function formatMoney(minor: number): string {
   return `${CURRENCY_SYMBOL} ${(minor / 100).toLocaleString('en-US', {
@@ -62,10 +86,11 @@ export interface Quote {
 }
 
 export function priceBasket(
-  items: Array<{ productId: string; quantity: number }>
+  items: Array<{ productId: string; quantity: number }>,
+  catalog: Record<string, CatalogItem>
 ): Quote {
   const lines: QuoteLine[] = items.map((item) => {
-    const product = CATALOG[item.productId];
+    const product = catalog[item.productId];
     if (!product) throw new Error(`Unknown product: ${item.productId}`);
     return {
       productId: product.id,

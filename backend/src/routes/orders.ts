@@ -5,7 +5,7 @@ import { createOrderSchema } from '../schemas/order';
 import { HttpError, asyncHandler } from '../middleware/errorHandler';
 import { rateLimit } from '../middleware/rateLimit';
 import { requireAuth, attachUser } from '../middleware/auth';
-import { CATALOG, CURRENCY, SHIPPING, priceBasket, MAX_QUANTITY_PER_ITEM } from '../data/catalog';
+import { CURRENCY, SHIPPING, priceBasket, resolveCatalog, MAX_QUANTITY_PER_ITEM } from '../data/catalog';
 
 export const ordersRouter = Router();
 ordersRouter.get('/config', (_req: Request, res: Response) => {
@@ -36,17 +36,21 @@ ordersRouter.post(
 
     const { customer, shipping, items } = parsed.data;
 
-    const unknown = items.filter((item) => !CATALOG[item.productId]);
+    if (!isDatabaseReady()) {
+      throw new HttpError(503, 'We cannot take orders right now — please try again shortly');
+    }
+
+    // Resolved before the price is worked out, so a piece that was archived
+    // while it sat in someone's bag is refused rather than sold.
+    const catalog = await resolveCatalog();
+    const unknown = items.filter((item) => !catalog[item.productId]);
     if (unknown.length) {
       throw new HttpError(400, 'Your bag contains an item we no longer carry', {
         items: unknown.map((item) => item.productId).join(', '),
       });
     }
-    if (!isDatabaseReady()) {
-      throw new HttpError(503, 'We cannot take orders right now — please try again shortly');
-    }
 
-    const quote = priceBasket(items);
+    const quote = priceBasket(items, catalog);
     const order = await OrderModel.create({
       reference: generateReference(),
       user: req.user?._id,

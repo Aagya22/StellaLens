@@ -9,6 +9,10 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters — see .env.example'),
   JWT_EXPIRES_IN: z.string().default('7d'),
+  CLOUDINARY_CLOUD_NAME: z.string().default(''),
+  CLOUDINARY_API_KEY: z.string().default(''),
+  CLOUDINARY_API_SECRET: z.string().default(''),
+  CLOUDINARY_FOLDER: z.string().default('stellalens/products'),
 });
 
 const parsed = envSchema.safeParse(process.env);

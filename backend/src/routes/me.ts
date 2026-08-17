@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { publicUser, publicCart } from '../models/User';
 import { earCalibrationSchema } from '../schemas/auth';
 import { cartSchema } from '../schemas/cart';
-import { CATALOG } from '../data/catalog';
+import { resolveCatalog } from '../data/catalog';
 import { OrderModel, publicOrder } from '../models/Order';
 import { HttpError, asyncHandler } from '../middleware/errorHandler';
 import { requireAuth } from '../middleware/auth';
@@ -65,7 +65,8 @@ meRouter.put(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = cartSchema.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, 'That bag could not be saved');
-    const items = parsed.data.items.filter((item) => CATALOG[item.productId]);
+    const catalog = await resolveCatalog();
+    const items = parsed.data.items.filter((item) => catalog[item.productId]);
 
     const user = req.user!;
     user.set(

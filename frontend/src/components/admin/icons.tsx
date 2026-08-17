@@ -19,6 +19,10 @@ export const IconPieces = () => (
   <svg {...base}><path d="M7 3h10l4 6-9 12L3 9z" /><path d="M3 9h18" /><path d="m12 21 3-12-2-6" /><path d="M12 21 9 9l2-6" /></svg>
 );
 
+export const IconCatalogue = () => (
+  <svg {...base}><rect x="3" y="3" width="7.5" height="7.5" rx="1.5" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" /><path d="M17.25 13.5v7.5M13.5 17.25h7.5" /></svg>
+);
+
 export const IconShop = () => (
   <svg {...base}><path d="M4 8h16l-1 12H5z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></svg>
 );

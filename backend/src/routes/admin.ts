@@ -5,19 +5,21 @@ import { orderStatusSchema, orderListQuerySchema, customerListQuerySchema } from
 import { HttpError, asyncHandler } from '../middleware/errorHandler';
 import { rateLimit } from '../middleware/rateLimit';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import { CURRENCY, CATALOG } from '../data/catalog';
+import { CURRENCY, resolveCatalog } from '../data/catalog';
 import { UserModel } from '../models/User';
+import { adminProductsRouter } from './adminProducts';
 
 export const adminRouter = Router();
 
 adminRouter.use(rateLimit({ windowMs: 60_000, max: 120 }));
 adminRouter.use(requireAuth, requireAdmin);
 
+adminRouter.use('/products', adminProductsRouter);
+
 function assertDatabase(): void {
   if (!isDatabaseReady()) throw new HttpError(503, 'The database is unavailable right now');
 }
 
-// Search is a user-supplied string dropped into a regex, so it must be escaped.
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -124,6 +126,7 @@ adminRouter.get(
     }
 
     const orderCount = new Map(ordersPerUser.map((r) => [String(r._id), r.n]));
+    const catalog = await resolveCatalog({ includeUnlisted: true });
 
     res.json({
       currency: CURRENCY,
@@ -148,8 +151,8 @@ adminRouter.get(
       perDay,
       topPieces: pieceRows.map((row) => ({
         productId: row._id,
-        name: CATALOG[row._id]?.name ?? row.name,
-        category: CATALOG[row._id]?.category ?? 'unknown',
+        name: catalog[row._id]?.name ?? row.name,
+        category: catalog[row._id]?.category ?? 'unknown',
         units: row.units,
         revenueMinor: row.minor,
       })),
@@ -270,8 +273,10 @@ adminRouter.get(
     ]);
     const sold = new Map(rows.map((r) => [r._id, r]));
 
+    const catalog = await resolveCatalog({ includeUnlisted: true });
+
     // Every catalogue piece appears, including the ones that have never sold.
-    const pieces = Object.values(CATALOG).map((item) => {
+    const pieces = Object.values(catalog).map((item) => {
       const s = sold.get(item.id);
       return {
         productId: item.id,

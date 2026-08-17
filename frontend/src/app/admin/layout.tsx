@@ -8,7 +8,7 @@ import { useToast } from '@/context/ToastContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import NotificationBell from '@/components/admin/NotificationBell';
 import {
-  IconOverview, IconOrders, IconCustomers, IconPieces,
+  IconOverview, IconOrders, IconCustomers, IconPieces, IconCatalogue,
   IconShop, IconSignOut, IconGem, IconMenu, IconClose,
 } from '@/components/admin/icons';
 
@@ -19,6 +19,7 @@ const NAV: Entry[] = [
   { name: 'Orders', path: '/admin/orders', section: 'Commerce', icon: <IconOrders /> },
   { name: 'Customers', path: '/admin/customers', section: 'Commerce', icon: <IconCustomers /> },
   { name: 'Pieces', path: '/admin/pieces', section: 'Catalogue', icon: <IconPieces /> },
+  { name: 'Manage', path: '/admin/catalogue', section: 'Catalogue', icon: <IconCatalogue /> },
 ];
 const SECTIONS = ['Menu', 'Commerce', 'Catalogue'];
 

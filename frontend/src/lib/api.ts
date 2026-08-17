@@ -48,6 +48,72 @@ export const api = {
 export const ORDER_STATUSES = ['new', 'contacted', 'fulfilled', 'cancelled'] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+export const PRODUCT_CATEGORIES = ['earrings', 'necklaces', 'rings', 'bracelets'] as const;
+export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+
+export const PRODUCT_STATUSES = ['active', 'hidden', 'archived'] as const;
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
+
+export interface ShopProduct {
+  id: string;
+  name: string;
+  category: ProductCategory;
+  priceMinor: number;
+  description: string;
+  image: string;
+}
+
+export interface AdminProduct extends ShopProduct {
+  imagePublicId: string;
+  status: ProductStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminProductList {
+  products: AdminProduct[];
+  counts: Record<string, number>;
+  currency: string;
+  uploadsEnabled: boolean;
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+export interface UploadTicket {
+  cloudName: string;
+  apiKey: string;
+  folder: string;
+  timestamp: number;
+  signature: string;
+  uploadUrl: string;
+}
+
+export interface UploadedImage {
+  url: string;
+  publicId: string;
+}
+
+export async function uploadProductImage(file: File): Promise<UploadedImage> {
+  const ticket = await api.post<UploadTicket>('/api/admin/products/upload-signature');
+
+  const form = new FormData();
+  form.append('file', file);
+  form.append('api_key', ticket.apiKey);
+  form.append('timestamp', String(ticket.timestamp));
+  form.append('folder', ticket.folder);
+  form.append('signature', ticket.signature);
+
+  const res = await fetch(ticket.uploadUrl, { method: 'POST', body: form });
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok || !body?.secure_url) {
+    throw new ApiError(res.status, body?.error?.message ?? 'That image could not be uploaded');
+  }
+  return { url: body.secure_url as string, publicId: body.public_id as string };
+}
+
 export interface AdminOrderRow {
   reference: string;
   status: OrderStatus;

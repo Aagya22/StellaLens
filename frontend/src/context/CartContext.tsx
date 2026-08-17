@@ -9,9 +9,10 @@ import {
   useRef,
   useState,
 } from 'react';
-import { PRODUCTS, Product } from '@/data/products';
+import { Product } from '@/data/products';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useCatalog } from '@/context/CatalogContext';
 import { useToast } from '@/context/ToastContext';
 
 export interface Customizations {
@@ -67,17 +68,15 @@ interface ServerCartItem {
 }
 
 function fromServer(items: ServerCartItem[]): CartItem[] {
-  return items
-    .filter((i) => PRODUCTS.some((p) => p.id === i.productId))
-    .map((i) => {
-      const customizations = i.customizations ?? {};
-      return {
-        key: makeKey(i.productId, customizations),
-        productId: i.productId,
-        quantity: Math.min(MAX_QUANTITY, Math.max(1, i.quantity)),
-        customizations,
-      };
-    });
+  return items.map((i) => {
+    const customizations = i.customizations ?? {};
+    return {
+      key: makeKey(i.productId, customizations),
+      productId: i.productId,
+      quantity: Math.min(MAX_QUANTITY, Math.max(1, i.quantity)),
+      customizations,
+    };
+  });
 }
 
 interface CartContextValue {
@@ -102,6 +101,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 // The bag lives on the account, not the browser.
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
+  const { find: findProduct } = useCatalog();
   const { toast } = useToast();
 
   const [items, setItems] = useState<CartItem[]>([]);
@@ -249,7 +249,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const lines = useMemo<CartLine[]>(() => {
     return items.flatMap((item) => {
-      const product = PRODUCTS.find((p) => p.id === item.productId);
+      const product = findProduct(item.productId);
       if (!product) return [];
       const unitPriceMinor = priceToMinor(product.price);
       return [{
@@ -259,9 +259,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         lineTotalMinor: unitPriceMinor * item.quantity,
       }];
     });
-  }, [items]);
+  }, [items, findProduct]);
 
-  const count = useMemo(() => items.reduce((n, i) => n + i.quantity, 0), [items]);
+  const count = useMemo(() => lines.reduce((n, l) => n + l.quantity, 0), [lines]);
   const subtotalMinor = useMemo(
     () => lines.reduce((sum, l) => sum + l.lineTotalMinor, 0),
     [lines]

@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Jost } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
+import { CatalogProvider } from "@/context/CatalogContext";
 import { ToastProvider } from "@/context/ToastContext";
 
 const cormorant = Cormorant_Garamond({
@@ -36,7 +37,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ToastProvider>
           <AuthProvider>
-            <CartProvider>{children}</CartProvider>
+            <CatalogProvider>
+              <CartProvider>{children}</CartProvider>
+            </CatalogProvider>
           </AuthProvider>
         </ToastProvider>
       </body>

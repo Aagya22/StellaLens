@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { PRODUCTS, Product } from '@/data/products';
+import { Product } from '@/data/products';
+import { useCatalog } from '@/context/CatalogContext';
 import ProductImage from '@/components/ProductImage';
 
 const priceValue = (p: Product) => Number(p.price.replace(/[^0-9.]/g, '')) || 0;
@@ -24,6 +25,7 @@ export default function JewelrySection({
   onAddToCart,
   canAddToCart,
 }: JewelrySectionProps) {
+  const { products } = useCatalog();
   const [justAdded, setJustAdded] = useState<string | null>(null);
   const addToBag = (product: Product) => {
     if (!onAddToCart(product)) return;
@@ -37,7 +39,7 @@ export default function JewelrySection({
 
   if (activeTab !== 'jewelry') return null;
 
-  const filtered = PRODUCTS.filter((p) => {
+  const filtered = products.filter((p) => {
     return selectedCat === 'all' || p.category === selectedCat;
   });
 
