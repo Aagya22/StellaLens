@@ -84,7 +84,7 @@ export default function OrdersPage() {
   const tabs: Array<OrderStatus | 'all'> = ['all', ...ORDER_STATUSES];
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex flex-wrap gap-2">
           {tabs.map((t) => {
@@ -108,7 +108,7 @@ export default function OrdersPage() {
         <SearchInput value={query} onChange={setQuery} placeholder="Search reference, name or email" />
       </div>
 
-      {error && <p className="text-sm" style={{ color: 'var(--red)' }}>{error}</p>}
+      {error && <p className="text-sm" style={{ color: '#d03b3b' }}>{error}</p>}
 
       {loading && !data ? (
         <Empty>Loading orders…</Empty>
@@ -133,7 +133,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {data && <Pager page={data.page} pages={data.pages} total={data.total} noun="orders" onPage={setPage} />}
+      {data && <Pager page={data.page} pages={data.pages} total={data.total} limit={data.limit} noun="orders" onPage={setPage} />}
     </div>
   );
 }

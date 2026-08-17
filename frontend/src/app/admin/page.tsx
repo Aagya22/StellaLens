@@ -8,6 +8,13 @@ import {
   Card, StatTile, Empty, BarRow, DailyOrders, pct, longDate,
 } from '@/components/admin/ui';
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export default function OverviewPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState('');
@@ -24,8 +31,19 @@ export default function OverviewPage() {
   const { revenue, orders, customers, perDay, topPieces, recentCustomers } = stats;
   const maxUnits = Math.max(1, ...topPieces.map((p) => p.units));
 
+  const today = new Date().toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="font-cormorant text-3xl leading-none" style={{ color: 'var(--admin-ink)' }}>
+          {greeting()}
+        </p>
+        <p className="text-sm mt-1.5" style={{ color: 'var(--admin-muted)' }}>{today}</p>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="Revenue · 30 days"
@@ -50,7 +68,7 @@ export default function OverviewPage() {
         />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3">
+      <div className="grid gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2" title="Orders per day" subtitle="Last 30 days">
           <DailyOrders perDay={perDay} formatMoney={formatMoney} />
         </Card>
@@ -60,7 +78,7 @@ export default function OverviewPage() {
           subtitle={`${orders.total} orders total`}
           action={<Link href="/admin/orders" className="text-xs underline" style={{ color: 'var(--admin-muted)' }}>Open</Link>}
         >
-          <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-4">
             {ORDER_STATUSES.map((s) => (
               <BarRow
                 key={s}
@@ -73,7 +91,7 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-2">
         <Card
           title="Best selling pieces"
           subtitle="By units sold, all time"
@@ -82,7 +100,7 @@ export default function OverviewPage() {
           {!topPieces.length ? (
             <Empty>Nothing sold yet.</Empty>
           ) : (
-            <div className="flex flex-col gap-3.5">
+            <div className="flex flex-col gap-4">
               {topPieces.map((p) => (
                 <BarRow
                   key={p.productId}
@@ -115,14 +133,14 @@ export default function OverviewPage() {
               <tbody>
                 {recentCustomers.map((c) => (
                   <tr key={c.email} style={{ borderTop: '1px solid var(--admin-line)' }}>
-                    <td className="py-2.5 pr-2 min-w-0">
+                    <td className="py-3 pr-3 min-w-0">
                       <span className="block truncate">{c.name}</span>
                       <span className="block truncate text-xs" style={{ color: 'var(--admin-muted)' }}>{c.email}</span>
                     </td>
-                    <td className="py-2.5 text-xs whitespace-nowrap" style={{ color: 'var(--admin-muted)' }}>
+                    <td className="py-3 text-xs whitespace-nowrap" style={{ color: 'var(--admin-muted)' }}>
                       {longDate(c.createdAt)}
                     </td>
-                    <td className="py-2.5 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{c.orders}</td>
+                    <td className="py-3 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{c.orders}</td>
                   </tr>
                 ))}
               </tbody>

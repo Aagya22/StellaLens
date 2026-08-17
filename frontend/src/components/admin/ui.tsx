@@ -3,17 +3,18 @@
 import { useMemo, useState } from 'react';
 import { OrderStatus } from '@/lib/api';
 
-export const SERIES = '#a3323f';
-export const TRACK = '#f2e6e7';
-export const GRID = '#ece9e4';
+export const SERIES = '#2f5aa8';
+export const TRACK = '#e6ebf5';
+export const GRID = '#eceef2';
 export const UP = '#006300';
 export const DOWN = '#d03b3b';
+export const GOLD = '#c2a06a';
 
 export const STATUS_TONE: Record<OrderStatus, { bg: string; fg: string }> = {
-  new: { bg: 'rgba(163,50,63,0.12)', fg: '#8c2430' },
-  contacted: { bg: 'rgba(179,146,94,0.20)', fg: '#6b5427' },
-  fulfilled: { bg: 'rgba(120,150,110,0.20)', fg: '#3e5637' },
-  cancelled: { bg: 'rgba(18,22,43,0.09)', fg: '#5a5f70' },
+  new: { bg: 'rgba(47,90,168,0.13)', fg: '#26467e' },
+  contacted: { bg: 'rgba(194,160,106,0.22)', fg: '#6b5427' },
+  fulfilled: { bg: 'rgba(120,150,110,0.22)', fg: '#3a5334' },
+  cancelled: { bg: 'rgba(28,36,56,0.09)', fg: '#5a6178' },
 };
 
 export function StatusChip({ status }: { status: OrderStatus }) {
@@ -36,18 +37,21 @@ export function Card({
 }) {
   return (
     <section
-      className={`rounded-2xl px-6 py-5 ${className}`}
-      style={{ background: '#ffffff', border: '1px solid var(--admin-line)', boxShadow: '0 1px 2px rgba(60,20,25,0.04)' }}
+      className={`rounded-2xl px-7 py-6 ${className}`}
+      style={{ background: '#ffffff', border: '1px solid var(--admin-line)', boxShadow: '0 1px 2px rgba(11,23,48,0.05)' }}
     >
       {(title || action) && (
         <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
+          <div className="flex gap-2.5">
+            <span className="mt-1 h-4 w-[2px] rounded-full shrink-0" style={{ background: GOLD }} />
+            <div>
             {title && (
               <h2 className="font-cormorant text-xl font-semibold leading-tight" style={{ color: 'var(--admin-ink)' }}>
                 {title}
               </h2>
             )}
-            {subtitle && <p className="text-xs mt-0.5" style={{ color: 'var(--admin-muted)' }}>{subtitle}</p>}
+              {subtitle && <p className="text-xs mt-0.5" style={{ color: 'var(--admin-muted)' }}>{subtitle}</p>}
+            </div>
           </div>
           {action}
         </div>
@@ -62,11 +66,11 @@ export function StatTile({
 }: { label: string; value: string; delta?: number | null; note?: string }) {
   return (
     <div
-      className="rounded-2xl px-6 py-5"
-      style={{ background: '#ffffff', border: '1px solid var(--admin-line)', boxShadow: '0 1px 2px rgba(60,20,25,0.04)' }}
+      className="rounded-2xl px-7 py-6"
+      style={{ background: '#ffffff', border: '1px solid var(--admin-line)', boxShadow: '0 1px 2px rgba(11,23,48,0.05)' }}
     >
       <p className="text-[11px] uppercase tracking-[0.12em]" style={{ color: 'var(--admin-muted)' }}>{label}</p>
-      <p className="text-[28px] font-semibold leading-tight mt-1.5" style={{ color: 'var(--admin-ink)' }}>
+      <p className="text-[30px] font-semibold leading-tight mt-2" style={{ color: 'var(--admin-ink)' }}>
         {value}
       </p>
       {delta !== undefined && delta !== null && (
@@ -99,21 +103,43 @@ export function SearchInput({
   );
 }
 
+// Always renders the range once there is anything to count — a lone page still
+// needs to say how many rows it is showing.
 export function Pager({
-  page, pages, total, noun, onPage,
-}: { page: number; pages: number; total: number; noun: string; onPage: (p: number) => void }) {
-  if (pages <= 1) return null;
+  page, pages, total, limit, noun, onPage,
+}: {
+  page: number; pages: number; total: number; limit: number;
+  noun: string; onPage: (p: number) => void;
+}) {
+  if (!total) return null;
+  const from = (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
+
+  const step = (p: number, label: string, disabled: boolean) => (
+    <button
+      disabled={disabled}
+      onClick={() => onPage(p)}
+      className="rounded-lg px-3 py-1.5 text-sm transition disabled:opacity-35 disabled:cursor-default"
+      style={{ background: '#ffffff', border: '1px solid var(--admin-line)', color: 'var(--admin-ink)' }}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <div className="flex items-center gap-4 mt-6 text-sm" style={{ color: 'var(--admin-ink)' }}>
-      <button disabled={page <= 1} onClick={() => onPage(page - 1)} className="underline disabled:opacity-30">
-        Previous
-      </button>
-      <span style={{ color: 'var(--admin-muted)' }}>
-        Page {page} of {pages} · {total} {noun}
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <span className="text-sm" style={{ color: 'var(--admin-muted)' }}>
+        Showing <strong style={{ color: 'var(--admin-ink)', fontWeight: 500 }}>{from}–{to}</strong> of {total} {noun}
       </span>
-      <button disabled={page >= pages} onClick={() => onPage(page + 1)} className="underline disabled:opacity-30">
-        Next
-      </button>
+      {pages > 1 && (
+        <div className="flex items-center gap-2">
+          {step(page - 1, 'Previous', page <= 1)}
+          <span className="text-sm px-1" style={{ color: 'var(--admin-muted)' }}>
+            Page {page} of {pages}
+          </span>
+          {step(page + 1, 'Next', page >= pages)}
+        </div>
+      )}
     </div>
   );
 }
@@ -239,7 +265,7 @@ export function DailyOrders({
               left: `${(hover / perDay.length) * 100}%`,
               transform: hover > perDay.length / 2 ? 'translateX(-100%)' : 'none',
               background: '#ffffff', border: '1px solid var(--admin-line)',
-              boxShadow: '0 8px 24px rgba(60,20,25,0.12)', color: 'var(--admin-ink)',
+              boxShadow: '0 8px 24px rgba(11,23,48,0.14)', color: 'var(--admin-ink)',
             }}
           >
             <strong>{shortDate(perDay[hover].date)}</strong>

@@ -35,10 +35,10 @@ export default function CustomersPage() {
   useEffect(() => { void load(); }, [load]);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <SearchInput value={query} onChange={setQuery} placeholder="Search name or email" />
 
-      {error && <p className="text-sm" style={{ color: 'var(--red)' }}>{error}</p>}
+      {error && <p className="text-sm" style={{ color: '#d03b3b' }}>{error}</p>}
 
       <Card>
         {loading && !data ? (
@@ -96,7 +96,7 @@ export default function CustomersPage() {
         )}
       </Card>
 
-      {data && <Pager page={data.page} pages={data.pages} total={data.total} noun="customers" onPage={setPage} />}
+      {data && <Pager page={data.page} pages={data.pages} total={data.total} limit={data.limit} noun="customers" onPage={setPage} />}
     </div>
   );
 }

@@ -3,14 +3,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError, AdminPiece } from '@/lib/api';
 import { formatMoney } from '@/context/CartContext';
-import { Card, Empty, StatTile, BarRow } from '@/components/admin/ui';
+import { Card, Empty, StatTile, BarRow, Pager } from '@/components/admin/ui';
 
 const CATEGORIES = ['all', 'earrings', 'necklaces', 'rings', 'bracelets'] as const;
+const PER_PAGE = 8;
 
 export default function PiecesPage() {
   const [pieces, setPieces] = useState<AdminPiece[] | null>(null);
   const [error, setError] = useState('');
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('all');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     api.get<{ pieces: AdminPiece[] }>('/api/admin/pieces')
@@ -22,6 +24,8 @@ export default function PiecesPage() {
     () => (pieces ?? []).filter((p) => category === 'all' || p.category === category),
     [pieces, category]
   );
+  const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE));
+  const pageRows = shown.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const maxUnits = Math.max(1, ...shown.map((p) => p.units));
   const sold = (pieces ?? []).filter((p) => p.units > 0);
   const never = (pieces ?? []).filter((p) => p.units === 0);
@@ -31,7 +35,7 @@ export default function PiecesPage() {
   if (!pieces) return <Empty>Loading…</Empty>;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <StatTile label="Pieces in catalogue" value={String(pieces.length)} note={`${sold.length} have sold`} />
         <StatTile label="Never ordered" value={String(never.length)} note={never.length ? 'Worth a second look' : 'Everything has sold'} />
@@ -48,7 +52,7 @@ export default function PiecesPage() {
           return (
             <button
               key={c}
-              onClick={() => setCategory(c)}
+              onClick={() => { setCategory(c); setPage(1); }}
               className="rounded-full px-4 py-1.5 text-sm capitalize transition"
               style={{
                 background: active ? 'var(--admin-rail)' : '#ffffff',
@@ -66,7 +70,7 @@ export default function PiecesPage() {
         {!shown.length ? (
           <Empty>No pieces in this category.</Empty>
         ) : (
-          <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-4">
             {shown.map((p) => (
               <BarRow
                 key={p.productId}
@@ -95,7 +99,7 @@ export default function PiecesPage() {
               </tr>
             </thead>
             <tbody>
-              {shown.map((p) => (
+              {pageRows.map((p) => (
                 <tr key={p.productId} style={{ borderTop: '1px solid var(--admin-line)' }}>
                   <td className="py-3 pr-4">{p.name}</td>
                   <td className="py-3 pr-4 text-xs capitalize" style={{ color: 'var(--admin-muted)' }}>{p.category}</td>
@@ -111,6 +115,9 @@ export default function PiecesPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="mt-5">
+          <Pager page={page} pages={pages} total={shown.length} limit={PER_PAGE} noun="pieces" onPage={setPage} />
         </div>
       </Card>
     </div>
