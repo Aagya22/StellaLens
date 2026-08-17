@@ -40,8 +40,45 @@ export const api = {
     request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
+
+export const ORDER_STATUSES = ['new', 'contacted', 'fulfilled', 'cancelled'] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+export interface AdminOrderRow {
+  reference: string;
+  status: OrderStatus;
+  customerName: string;
+  customerEmail: string;
+  itemCount: number;
+  totalMinor: number;
+  currency: string;
+  createdAt: string;
+}
+
+export interface AdminOrderList {
+  orders: AdminOrderRow[];
+  counts: Record<string, number>;
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+export interface AdminOrderDetail {
+  id: string;
+  reference: string;
+  status: OrderStatus;
+  customer: { name: string; email: string; phone: string };
+  shipping: { address: string; city: string; postalCode: string; country: string; notes?: string };
+  items: OrderItem[];
+  totals: { subtotalMinor: number; deliveryMinor: number; totalMinor: number; currency: string };
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface LobePoint {
   x: number;
