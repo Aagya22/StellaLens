@@ -23,7 +23,9 @@ export const CATALOG: Record<string, CatalogItem> = {
   ring_rosanna: { id: 'ring_rosanna', name: 'Rosanna Pavé Band', category: 'rings', priceMinor: 160_000 },
   ring_silver_moon: { id: 'ring_silver_moon', name: 'Silver Moon Ring', category: 'rings', priceMinor: 190_000 },
   bracelet_lyra: { id: 'bracelet_lyra', name: 'Lyra Topaz Weave', category: 'bracelets', priceMinor: 135_000 },
-  bracelet_aurelia: { id: 'bracelet_aurelia', name: 'Aurelia Bangle', category: 'bracelets', priceMinor: 110_000 },
+  bracelet_solene: { id: 'bracelet_solene', name: 'Solene Gold Bracelet', category: 'bracelets', priceMinor: 125_000 },
+  necklace_elara: { id: 'necklace_elara', name: 'Elara Layered Collar', category: 'necklaces', priceMinor: 120_000 },
+  ring_doji: { id: 'ring_doji', name: 'Doji Diamond Ring', category: 'rings', priceMinor: 210_000 },
 };
 export const SHIPPING = {
   deliveryMinor: 2_500,

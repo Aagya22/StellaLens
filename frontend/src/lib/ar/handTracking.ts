@@ -62,6 +62,7 @@ export class HandTracker {
 
       worldLandmarks: res.worldLandmarks?.[0] ?? null,
       handedness: res.handednesses?.[0]?.[0]?.categoryName ?? "Unknown",
+      score: res.handednesses?.[0]?.[0]?.score ?? 1,
     };
   }
 

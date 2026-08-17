@@ -78,7 +78,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
 
   const [calibEar, setCalibEar] = useState<'userRight' | 'userLeft'>('userRight');
   const [, setCalibTick] = useState(0);
-  const [bodyFitInfo, setBodyFitInfo] = useState<
+  const [, setBodyFitInfo] = useState<
     { status: string; cm: number | null; scale: number; samples: number; needed: number; baseline: number } | null
   >(null);
 
@@ -155,67 +155,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             ` lateral ${o.lateral.toFixed(1)} · down ${o.down.toFixed(1)} · back ${o.back.toFixed(1)}`
           );
         }
-      };
-      window.addEventListener('keydown', onKey);
-      return () => window.removeEventListener('keydown', onKey);
-    }
-    if (activeProduct.category === 'necklaces') {
-      const onKey = (e: KeyboardEvent) => {
-        const anchor = necklacesRef.current?.getAnchor();
-        if (!anchor?.pivotOffset) return;
-        const step = 0.1 * (e.shiftKey ? 4 : 1);
-        const o = anchor.pivotOffset;
-        let handled = true;
-        switch (e.key.toLowerCase()) {
-          case 'a': o.x -= step; break;
-          case 'd': o.x += step; break;
-          case 'w': anchor.dropCm -= step; break;
-          case 's': anchor.dropCm += step; break;
-          case 'r': o.z += step; break;
-          case 'f': o.z -= step; break;
-          case 'z': anchor.widthCm -= step * 2.5; break;
-          case 'x': anchor.widthCm += step * 2.5; break;
-          case 'n':
-            if (activeProduct.necklaceStyle === 'pendant') anchor.pendantCm = (anchor.pendantCm ?? 4) - step;
-            else anchor.lengthCm = (anchor.lengthCm || anchor.widthCm) - step * 2.5;
-            break;
-          case 'm':
-            if (activeProduct.necklaceStyle === 'pendant') anchor.pendantCm = (anchor.pendantCm ?? 4) + step;
-            else anchor.lengthCm = (anchor.lengthCm || anchor.widthCm) + step * 2.5;
-            break;
-          case 'c': anchor.forwardCm -= step; break;
-          case 'v': anchor.forwardCm += step; break;
-          case 'g': anchor.occRxCm -= step; break;
-          case 'h': anchor.occRxCm += step; break;
-          case 'j': anchor.occRzCm -= step; break;
-          case 'k': anchor.occRzCm += step; break;
-          case 'b': necklacesRef.current?.toggleOccluderDebug(); break;
-          default: handled = false;
-        }
-        if (handled) {
-          e.preventDefault();
-          setCalibTick(t => t + 1);
-        }
-      };
-      window.addEventListener('keydown', onKey);
-      return () => window.removeEventListener('keydown', onKey);
-    }
-    if (activeProduct.category === 'rings') {
-      const onKey = (e: KeyboardEvent) => {
-        const fit = ringsRef.current?.getFit();
-        if (!fit) return;
-        const step = 0.05 * (e.shiftKey ? 4 : 1);
-        let handled = true;
-        switch (e.key.toLowerCase()) {
-          case 'z': fit.sizeCm = Math.max(0.4, fit.sizeCm - step); break;
-          case 'x': fit.sizeCm += step; break;
-          case 'w': fit.alongT = Math.max(0, fit.alongT - 0.03); break;
-          case 's': fit.alongT = Math.min(1, fit.alongT + 0.03); break;
-          case 'r': fit.liftCm += step; break;
-          case 'f': fit.liftCm -= step; break;
-          default: handled = false;
-        }
-        if (handled) { e.preventDefault(); setCalibTick(t => t + 1); }
       };
       window.addEventListener('keydown', onKey);
       return () => window.removeEventListener('keydown', onKey);
@@ -537,10 +476,11 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
                 ringsRef.current?.update({ hand: det, view, dtSeconds });
               } else if (isBracelet) {
                 braceletsRef.current?.setVisible(true);
-                braceletsRef.current?.update({ hand: det, view, dtSeconds });
+                braceletsRef.current?.update({ hand: det, view, dtSeconds, video });
               }
 
               let guide = '';
+              if (isBracelet && braceletsRef.current?.isPosed() === false) guide = 'Open your hand and show your wrist';
               if (activeProduct.category === 'earrings') {
                 const eL = det.landmarks[33], eR = det.landmarks[263];
                 if (eL && eR) {
@@ -583,7 +523,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
               if (isHand) {
                 ringsRef.current?.setVisible(false);
                 braceletsRef.current?.setVisible(false);
-                const handGuide = isBracelet ? 'Show your wrist to the camera' : 'Show your hand to the camera';
+                const handGuide = isBracelet ? 'Open your hand and show your wrist' : 'Show your hand to the camera';
                 if (trackingLostMs > 800 && lastGuide !== handGuide) { lastGuide = handGuide; setGuideMsg(handGuide); }
               } else if (lastGuide) { lastGuide = ''; setGuideMsg(''); }
             }
@@ -910,83 +850,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
         </div>
         </div>
 
-        {activeProduct.category === 'necklaces' && (() => {
-          const anchor = necklacesRef.current?.getAnchor();
-          const o = anchor?.pivotOffset;
-          return (
-            <div
-              className="absolute top-5 right-5 z-20 flex flex-col gap-1.5"
-              style={{
-                background: '#ffffff',
-                border: '1px solid var(--cream-border)',
-                boxShadow: '0 8px 24px rgba(60,50,35,0.10)',
-                borderRadius: '12px',
-                padding: '12px 16px',
-                fontFamily: 'monospace',
-                fontSize: '11px',
-                color: 'var(--cream-text)',
-                lineHeight: 1.5,
-              }}
-            >
-              <span style={{ color: 'var(--gold-bright)', letterSpacing: '0.12em' }}>
-                NECK CALIBRATION · {activeProduct.name.toUpperCase()}
-              </span>
-              <span>pivot x A/D : {o ? `${o.x.toFixed(1)} cm` : '—'}</span>
-              <span>drop&nbsp;&nbsp;&nbsp; W/S : {anchor ? `${anchor.dropCm.toFixed(1)} cm` : '—'}</span>
-              <span>pivot z R/F : {o ? `${o.z.toFixed(1)} cm` : '—'}</span>
-              <span>width&nbsp;&nbsp; Z/X : {anchor ? `${anchor.widthCm.toFixed(1)} cm` : '—'}</span>
-              {activeProduct.necklaceStyle === 'pendant' ? (
-                <span>pendant N/M : {anchor ? `${(anchor.pendantCm ?? 4).toFixed(1)} cm` : '—'}</span>
-              ) : (
-                <span>length&nbsp; N/M : {anchor ? `${(anchor.lengthCm || anchor.widthCm).toFixed(1)} cm` : '—'}</span>
-              )}
-              <span>fwd&nbsp;&nbsp;&nbsp;&nbsp; C/V : {anchor ? `${anchor.forwardCm.toFixed(1)} cm` : '—'}</span>
-              <span>neck w&nbsp; G/H : {anchor ? `${(anchor.occRxCm ?? 5).toFixed(1)} cm` : '—'}</span>
-              <span>neck d&nbsp; J/K : {anchor ? `${(anchor.occRzCm ?? 5.5).toFixed(1)} cm` : '—'}</span>
-              {(() => {
-                const bf = bodyFitInfo;
-                if (!bf) return <span style={{ opacity: 0.5 }}>body&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : —</span>;
-                const ok = bf.status === 'ok';
-                const label =
-                  bf.status === 'loading' ? 'loading pose model…' :
-                  bf.status === 'measuring' ? `measuring… ${bf.samples}/${bf.needed}` :
-                  bf.status === 'no-shoulders' ? 'shoulders not seen · ×1.00' :
-                  bf.status === 'unavailable' ? 'pose model failed · ×1.00' :
-                  `${bf.cm?.toFixed(1)} cm → ×${bf.scale.toFixed(2)}`;
-                return (
-                  <>
-                    <span style={{ color: ok ? '#2e7d32' : '#b26a00' }}>body&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : {label}</span>
-                    {ok && <span style={{ opacity: 0.5 }}>baseline&nbsp; : {bf.baseline} cm</span>}
-                  </>
-                );
-              })()}
-              <span style={{ opacity: 0.5 }}>B show neck · Shift ×4 · [ ] FOV</span>
-            </div>
-          );
-        })()}
-
-        {activeProduct.category === 'rings' && (() => {
-          const fit = ringsRef.current?.getFit();
-          return (
-            <div
-              className="absolute top-5 right-5 z-20 flex flex-col gap-1.5"
-              style={{
-                background: '#ffffff', border: '1px solid var(--cream-border)',
-                boxShadow: '0 8px 24px rgba(60,50,35,0.10)', borderRadius: '12px',
-                padding: '12px 16px', fontFamily: 'monospace', fontSize: '11px',
-                color: 'var(--cream-text)', lineHeight: 1.5,
-              }}
-            >
-              <span style={{ color: 'var(--gold-bright)', letterSpacing: '0.12em' }}>
-                RING CALIBRATION · {activeProduct.name.toUpperCase()}
-              </span>
-              <span>size&nbsp;&nbsp; Z\X : {fit ? `${fit.sizeCm.toFixed(2)}×` : '—'}</span>
-              <span>along W\S : {fit ? fit.alongT.toFixed(2) : '—'}</span>
-              <span>lift&nbsp;&nbsp; R\F : {fit ? `${fit.liftCm.toFixed(2)} cm` : '—'}</span>
-              <span style={{ opacity: 0.5 }}>Shift ×4 step</span>
-            </div>
-          );
-        })()}
       </div>
 
       <div

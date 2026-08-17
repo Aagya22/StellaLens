@@ -36,6 +36,7 @@ export interface Product {
     loose?: number;
     offsetCm?: number;
     wristCm?: number;
+    tiltDeg?: number;
   };
   necklaceAnchor?: {
     pivotOffset?: { x?: number; y?: number; z?: number };
@@ -275,7 +276,7 @@ export const PRODUCTS: Product[] = [
     image: "/images/products/silver-moon-ring.png",
     preserveMaterials: true,
 
-    ringFit: { alongT: 0.5, sizeCm: 1.2 },
+    ringFit: { alongT: 0.91, sizeCm: 1.2, liftCm: 0 },
   },
   {
     id: "bracelet_lyra",
@@ -291,15 +292,46 @@ export const PRODUCTS: Product[] = [
     braceletFit: { loose: 1.15 },
   },
   {
-    id: "bracelet_aurelia",
-    name: "Aurelia Bangle",
+    id: "bracelet_solene",
+    name: "Solene Gold Bracelet",
     category: "bracelets",
-    price: "Rs 1,100",
-    description: "A sculpted gold bangle, worn a touch loose on the wrist.",
-    modelPath: "/models/bracelets/bracelet (1).glb",
+    price: "Rs 1,250",
+    description: "A smooth gold bracelet, sculpted to sit softly against the wrist.",
+    modelPath: "/models/bracelets/gold_bracelet.glb",
     arEnabled: true,
-    image: "/images/products/aurelia-bangle.png",
+    image: "/images/products/solene-bracelet.png",
     preserveMaterials: true,
-    braceletFit: { loose: 1.15 },
+    // Thicker band than the Lyra, so it needs a tighter hole to match its bulk.
+    braceletFit: { loose: 1.0 },
+  },
+  {
+    id: "necklace_elara",
+    name: "Elara Layered Collar",
+    category: "necklaces",
+    price: "Rs 1,200",
+    description: "A double strand that follows the collarbone, finished with a beaded drop at the front.",
+    modelPath: "/models/necklaces/double_layer_collar_bone_necklace.glb",
+    arEnabled: true,
+    image: "/images/products/elara-chain.png",
+    preserveMaterials: true,
+    // group1 is the display bust; nothing else in the file matches that name.
+    necklaceStrip: ['group1'],
+    necklaceAnchor: {
+      pivotOffset: { x: 0, z: -5.2 }, dropCm: 6.6,
+      widthCm: 17, lengthCm: 17, forwardCm: 3.2,
+      occRxCm: 5.8, occRzCm: 4.4,
+    },
+  },
+  {
+    id: "ring_doji",
+    name: "Doji Diamond Ring",
+    category: "rings",
+    price: "Rs 2,100",
+    description: "A raised diamond crown on a slender band, cut to catch light from every angle.",
+    modelPath: "/models/rings/doji_diamond_ring.glb",
+    arEnabled: true,
+    image: "/images/products/doji-diamond-ring.png",
+    preserveMaterials: true,
+    ringFit: { alongT: 0.5, sizeCm: 1.2 },
   }
 ];
