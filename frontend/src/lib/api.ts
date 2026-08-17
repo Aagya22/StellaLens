@@ -68,6 +68,36 @@ export interface AdminOrderList {
   pages: number;
 }
 
+export interface AdminCustomer {
+  id: string;
+  name: string;
+  email: string;
+  role: 'customer' | 'admin';
+  calibrated: boolean;
+  createdAt: string;
+  orders: number;
+  spentMinor: number;
+  lastOrderAt: string | null;
+}
+
+export interface AdminCustomerList {
+  customers: AdminCustomer[];
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+export interface AdminPiece {
+  productId: string;
+  name: string;
+  category: string;
+  priceMinor: number;
+  units: number;
+  revenueMinor: number;
+  orders: number;
+}
+
 export interface AdminStats {
   currency: string;
   revenue: { allTimeMinor: number; last30Minor: number; prev30Minor: number; avgOrderMinor: number };

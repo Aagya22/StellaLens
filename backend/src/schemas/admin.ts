@@ -12,4 +12,10 @@ export const orderListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+export const customerListQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { isDatabaseReady } from '../config/db';
 import { OrderModel, adminOrder, ORDER_STATUSES } from '../models/Order';
-import { orderStatusSchema, orderListQuerySchema } from '../schemas/admin';
+import { orderStatusSchema, orderListQuerySchema, customerListQuerySchema } from '../schemas/admin';
 import { HttpError, asyncHandler } from '../middleware/errorHandler';
 import { rateLimit } from '../middleware/rateLimit';
 import { requireAuth, requireAdmin } from '../middleware/auth';
@@ -160,6 +160,94 @@ adminRouter.get(
         orders: orderCount.get(String(u._id)) ?? 0,
       })),
     });
+  })
+);
+
+adminRouter.get(
+  '/customers',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = customerListQuerySchema.safeParse(req.query);
+    if (!parsed.success) throw new HttpError(400, 'Invalid filters');
+    const { q, page, limit } = parsed.data;
+    assertDatabase();
+
+    const filter: Record<string, unknown> = {};
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      filter.$or = [{ name: rx }, { email: rx }];
+    }
+
+    const [users, total] = await Promise.all([
+      UserModel.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .select('name email role earCalibration createdAt'),
+      UserModel.countDocuments(filter),
+    ]);
+
+    const spend = await OrderModel.aggregate<{ _id: unknown; n: number; minor: number; last: Date }>([
+      { $match: { user: { $in: users.map((u) => u._id) }, ...EARNING } },
+      { $group: { _id: '$user', n: { $sum: 1 }, minor: { $sum: '$totals.totalMinor' }, last: { $max: '$createdAt' } } },
+    ]);
+    const byUser = new Map(spend.map((s) => [String(s._id), s]));
+
+    res.json({
+      customers: users.map((u) => {
+        const s = byUser.get(String(u._id));
+        return {
+          id: u.id as string,
+          name: u.name,
+          email: u.email,
+          role: u.role ?? 'customer',
+          calibrated: Boolean(u.earCalibration),
+          createdAt: u.createdAt,
+          orders: s?.n ?? 0,
+          spentMinor: s?.minor ?? 0,
+          lastOrderAt: s?.last ?? null,
+        };
+      }),
+      page, limit, total,
+      pages: Math.max(1, Math.ceil(total / limit)),
+    });
+  })
+);
+
+adminRouter.get(
+  '/pieces',
+  asyncHandler(async (_req: Request, res: Response) => {
+    assertDatabase();
+    const rows = await OrderModel.aggregate<{ _id: string; units: number; minor: number; orders: number }>([
+      { $match: EARNING },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.productId',
+          units: { $sum: '$items.quantity' },
+          minor: { $sum: '$items.lineTotalMinor' },
+          orders: { $addToSet: '$_id' },
+        },
+      },
+      { $project: { units: 1, minor: 1, orders: { $size: '$orders' } } },
+    ]);
+    const sold = new Map(rows.map((r) => [r._id, r]));
+
+    // Every catalogue piece appears, including the ones that have never sold.
+    const pieces = Object.values(CATALOG).map((item) => {
+      const s = sold.get(item.id);
+      return {
+        productId: item.id,
+        name: item.name,
+        category: item.category,
+        priceMinor: item.priceMinor,
+        units: s?.units ?? 0,
+        revenueMinor: s?.minor ?? 0,
+        orders: s?.orders ?? 0,
+      };
+    });
+    pieces.sort((a, b) => b.units - a.units || b.revenueMinor - a.revenueMinor);
+
+    res.json({ pieces, currency: CURRENCY });
   })
 );
 
