@@ -67,6 +67,12 @@ export async function attachUser(req: Request, _res: Response, next: NextFunctio
   next();
 }
 
+// 404, not 403: an admin area shouldn't confirm it exists to a signed-in customer.
+export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
+  if (req.user?.role !== 'admin') return next(new HttpError(404, 'Not found'));
+  next();
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const user = req.user ?? (await userFromRequest(req));

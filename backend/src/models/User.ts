@@ -48,6 +48,7 @@ const userSchema = new Schema(
       maxlength: 200,
     },
     passwordHash: { type: String, required: true, select: false },
+    role: { type: String, enum: ['customer', 'admin'], default: 'customer', index: true },
     earCalibration: { type: earCalibrationSchema, default: null },
     cart: { type: [cartItemSchema], default: [] },
   },
@@ -64,6 +65,7 @@ export function publicUser(user: UserDocument) {
     id: user.id as string,
     name: user.name,
     email: user.email,
+    role: user.role ?? 'customer',
     earCalibration: user.earCalibration ?? null,
     createdAt: user.createdAt,
   };

@@ -6,7 +6,8 @@
     "dev": "ts-node-dev --respawn --transpile-only --exit-child src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "make-admin": "ts-node-dev --transpile-only --no-notify src/scripts/makeAdmin.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
