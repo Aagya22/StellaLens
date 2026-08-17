@@ -32,6 +32,9 @@ const shippingSchema = new Schema(
   { _id: false }
 );
 
+export const ORDER_STATUSES = ['new', 'contacted', 'fulfilled', 'cancelled'] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
 const orderSchema = new Schema(
   {
     reference: { type: String, required: true, unique: true },
@@ -60,7 +63,7 @@ const orderSchema = new Schema(
 
     status: {
       type: String,
-      enum: ['new', 'contacted', 'fulfilled', 'cancelled'],
+      enum: ORDER_STATUSES,
       default: 'new',
     },
   },
@@ -80,6 +83,21 @@ export function generateReference(): string {
   const stamp = Date.now().toString(36).toUpperCase();
   const salt = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `SL-${stamp}-${salt}`;
+}
+
+// Adds what staff need to actually fulfil an order: who, where, and the id.
+export function adminOrder(order: OrderDocument) {
+  return {
+    id: order.id as string,
+    reference: order.reference,
+    status: order.status,
+    customer: order.customer,
+    shipping: order.shipping,
+    items: order.items,
+    totals: order.totals,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  };
 }
 
 export function publicOrder(order: OrderDocument) {

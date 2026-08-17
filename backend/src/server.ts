@@ -8,6 +8,7 @@ import { connectDatabase, disconnectDatabase, isDatabaseReady } from './config/d
 import { ordersRouter } from './routes/orders';
 import { authRouter } from './routes/auth';
 import { meRouter } from './routes/me';
+import { adminRouter } from './routes/admin';
 import { errorHandler, notFound } from './middleware/errorHandler';
 
 const app = express();
@@ -42,6 +43,7 @@ app.get('/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRouter);
 app.use('/api/me', meRouter);
 app.use('/api/orders', ordersRouter);
+app.use('/api/admin', adminRouter);
 
 app.use(notFound);
 app.use(errorHandler);
