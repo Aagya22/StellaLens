@@ -17,7 +17,30 @@ import { estimateHeadPose } from '@/lib/ar/headPose';
 import { EarAnchor } from '@/lib/ar/earAnchor';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { Product, PRODUCTS } from '@/data/products';
+import { Product } from '@/data/products';
+
+const FIT_TIPS: Record<Product['category'], string[]> = {
+  earrings: [
+    'Centre your face in the oval and hold still for a moment.',
+    'Tuck your hair behind your ears so the lobes are visible.',
+    'Use “Fit to my ears” once to pin the placement to your face.',
+  ],
+  necklaces: [
+    'Face the camera straight on, about an arm’s length away.',
+    'Keep your collarbone in frame so the chain can sit correctly.',
+    'Even, front-on light keeps the metal reading as metal.',
+  ],
+  rings: [
+    'Hold your hand up, palm toward the camera.',
+    'Keep your fingers slightly apart and inside the frame.',
+    'Move slowly — quick flicks lose tracking for a moment.',
+  ],
+  bracelets: [
+    'Open your hand and show your wrist to the camera.',
+    'Keep your palm facing forward — the band hides otherwise.',
+    'A plain background helps it measure your wrist accurately.',
+  ],
+};
 
 interface ARViewProps {
   product: Product;
@@ -580,32 +603,6 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
     a.click();
   };
 
-  const railProducts = PRODUCTS.filter(p => p.arEnabled);
-  const categoryGlyph = (cat: string) => {
-    switch (cat) {
-      case 'earrings': return (
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
-          <path d="M12 3l6 7-6 11L6 10z" strokeLinejoin="round" />
-        </svg>
-      );
-      case 'necklaces': return (
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
-          <path d="M4 4c2 6 6 9 8 9s6-3 8-9" /><circle cx="12" cy="16.5" r="3" />
-        </svg>
-      );
-      case 'rings': return (
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
-          <circle cx="12" cy="14" r="6" /><path d="M9 8.5l3-4.5 3 4.5" strokeLinejoin="round" />
-        </svg>
-      );
-      default: return (
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
-          <rect x="4.5" y="4.5" width="15" height="15" rx="7.5" />
-        </svg>
-      );
-    }
-  };
-
   const handleOrder = () => {
     onOpenOrderModal({
       productId: activeProduct.id,
@@ -623,39 +620,38 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
       className="fixed inset-0 z-50 flex flex-col md:flex-row overflow-hidden"
       style={{ background: 'var(--cream, #ffffff)' }}
     >
+      {/* The rail is the way out of the try-on, not a piece switcher — pieces
+          are chosen from the catalogue, so browsing them from in here only
+          duplicated that and reloaded a model on every stray click. */}
       <div
-        className="hidden md:flex flex-col items-center gap-3 px-4 py-6"
+        className="hidden md:flex flex-col items-center px-4 py-6"
         style={{ borderRight: '1px solid var(--cream-border)' }}
       >
-        <span
+        <button
+          onClick={onClose}
+          title="Back to the catalogue"
+          className="cursor-pointer flex flex-col items-center gap-2"
           style={{
-            fontSize: '9px', letterSpacing: '0.25em', textTransform: 'uppercase',
-            color: 'var(--gold)', fontFamily: 'var(--font-jost), sans-serif',
-            marginBottom: '4px',
+            background: 'none', border: 'none', padding: '4px',
+            color: 'var(--cream-muted)', transition: 'color 0.2s',
+            fontFamily: 'var(--font-jost), sans-serif',
           }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--gold-bright)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--cream-muted)')}
         >
-          Try on
-        </span>
-        {railProducts.map(p => {
-          const active = p.id === activeProduct.id;
-          return (
-            <button
-              key={p.id}
-              title={p.name}
-              onClick={() => setActiveProduct(p)}
-              className="cursor-pointer flex items-center justify-center"
-              style={{
-                width: '44px', height: '44px', borderRadius: '12px',
-                border: active ? '1.5px solid var(--gold)' : '1px solid var(--cream-border)',
-                color: active ? 'var(--gold-bright)' : 'var(--cream-muted)',
-                background: active ? 'rgba(179,146,94,0.08)' : 'transparent',
-                transition: 'all 0.2s',
-              }}
-            >
-              {categoryGlyph(p.category)}
-            </button>
-          );
-        })}
+          <span
+            className="flex items-center justify-center"
+            style={{
+              width: '44px', height: '44px', borderRadius: '12px',
+              border: '1px solid var(--cream-border)',
+            }}
+          >
+            <BackArrow />
+          </span>
+          <span style={{ fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+            Back
+          </span>
+        </button>
       </div>
 
       <div className="relative flex-1 flex items-center justify-center min-h-0 p-3 md:p-5">
@@ -781,9 +777,12 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           </div>
         )}
 
+        {/* Mobile only. On desktop the rail carries Back; on a phone the rail
+            is hidden and the side panel sits below the fold, so without this
+            there would be no visible way out. */}
         <button
           onClick={onClose}
-          className="absolute z-20 cursor-pointer flex items-center gap-2"
+          className="md:hidden absolute z-20 cursor-pointer flex items-center gap-2"
           style={{
             top: 'calc(16px + env(safe-area-inset-top))',
             left: 'calc(16px + env(safe-area-inset-left))',
@@ -895,7 +894,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
             className="font-editorial"
             style={{
               fontSize: '28px', fontWeight: 400,
-              letterSpacing: '0.02em', color: 'var(--cream-text)', lineHeight: 1.2,
+              letterSpacing: '0.02em', color: '#141414', lineHeight: 1.2,
               fontFamily: "var(--font-cormorant), 'Cormorant Garamond', serif",
             }}
           >
@@ -904,7 +903,7 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           <span
             style={{
               fontSize: '18px', fontWeight: 400,
-              color: 'var(--gold-bright)', letterSpacing: '0.05em',
+              color: 'var(--cream-text)', letterSpacing: '0.05em',
               fontFamily: "var(--font-jost), sans-serif",
             }}
           >
@@ -913,12 +912,52 @@ export default function ARView({ product, onClose, onOpenOrderModal }: ARViewPro
           <p
             style={{
               fontSize: '12px', fontWeight: 300,
-              color: 'var(--cream-muted)', lineHeight: 1.8, marginTop: '4px',
+              color: '#6b6b6b', lineHeight: 1.8, marginTop: '4px',
               fontFamily: "var(--font-jost), sans-serif",
             }}
           >
             {activeProduct.description}
           </p>
+        </div>
+
+        <div className="px-8 py-7 flex flex-col gap-4">
+          <span
+            style={{
+              fontSize: '9px', letterSpacing: '0.25em', textTransform: 'uppercase',
+              color: 'var(--gold)', fontFamily: "var(--font-jost), sans-serif",
+            }}
+          >
+            For the best fit
+          </span>
+
+          <div className="flex flex-col gap-3.5">
+            {FIT_TIPS[activeProduct.category].map((tip, i) => (
+              <span key={tip} className="flex items-start gap-3">
+                <span
+                  className="flex items-center justify-center shrink-0"
+                  style={{
+                    width: '20px', height: '20px', borderRadius: '999px',
+                    border: '1px solid var(--gold-fade)',
+                    color: 'var(--gold-bright)',
+                    fontFamily: "var(--font-jost), sans-serif",
+                    fontSize: '9px', letterSpacing: '0.02em',
+                    marginTop: '1px',
+                  }}
+                >
+                  {i + 1}
+                </span>
+                <span
+                  style={{
+                    fontSize: '12px', fontWeight: 300, lineHeight: 1.65,
+                    color: '#6b6b6b',
+                    fontFamily: "var(--font-jost), sans-serif",
+                  }}
+                >
+                  {tip}
+                </span>
+              </span>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1" />

@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Product } from '@/data/products';
 import { useCatalog } from '@/context/CatalogContext';
 import ProductImage from '@/components/ProductImage';
+import ProductDetail from '@/components/ProductDetail';
+
+const RELATED_COUNT = 4;
 
 const priceValue = (p: Product) => Number(p.price.replace(/[^0-9.]/g, '')) || 0;
 
@@ -36,8 +39,46 @@ export default function JewelrySection({
   const [sortBy, setSortBy] = useState<'featured' | 'low-high' | 'high-low'>('featured');
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== 'jewelry') setDetailId(null);
+  }, [activeTab]);
+
+  const hadDetail = useRef(false);
+  useEffect(() => {
+    if (detailId) { hadDetail.current = true; return; }
+    if (!hadDetail.current) return;
+    hadDetail.current = false;
+    const frame = requestAnimationFrame(() => {
+      document
+        .querySelectorAll('[data-animate]:not(.is-visible)')
+        .forEach((el) => el.classList.add('is-visible'));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [detailId]);
+
+  const openDetail = (product: Product) => {
+    setDetailId(product.id);
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  };
 
   if (activeTab !== 'jewelry') return null;
+
+  const detail = detailId ? products.find((p) => p.id === detailId) : null;
+  if (detail) {
+    return (
+      <ProductDetail
+        product={detail}
+        related={products.filter((p) => p.category === detail.category && p.id !== detail.id).slice(0, RELATED_COUNT)}
+        canAddToCart={canAddToCart}
+        onBack={() => setDetailId(null)}
+        onTryOn={setActiveArProduct}
+        onAddToCart={onAddToCart}
+        onSelect={openDetail}
+      />
+    );
+  }
 
   const filtered = products.filter((p) => {
     return selectedCat === 'all' || p.category === selectedCat;
@@ -152,8 +193,11 @@ export default function JewelrySection({
 
               transition={{ duration: 0.55, delay: (i % 4) * 0.07, ease: [0.22, 1, 0.36, 1] }}
               whileHover={{ y: -6 }}
-              className="group flex flex-col items-center text-center gap-4 max-w-[220px] w-full min-w-0 mx-auto">
-              <div className="relative w-full aspect-square overflow-hidden bg-[#ffffff] border border-black/5 flex items-center justify-center transition-all duration-300 group-hover:border-[#c5a880]/30 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)]">
+              className="group flex flex-col items-center text-center gap-4 max-w-[220px] w-full min-w-0 h-full">
+              <button
+                onClick={() => openDetail(product)}
+                aria-label={`View ${product.name}`}
+                className="relative w-full aspect-square overflow-hidden bg-[#ffffff] border border-black/5 flex items-center justify-center transition-all duration-300 group-hover:border-[#c5a880]/30 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] cursor-pointer p-0">
                 <div className="absolute top-3 left-3 w-3 h-3 pointer-events-none" style={{ borderTop: '1px solid rgba(197,168,128,0.25)', borderLeft: '1px solid rgba(197,168,128,0.25)' }} />
                 <div className="absolute top-3 right-3 w-3 h-3 pointer-events-none" style={{ borderTop: '1px solid rgba(197,168,128,0.25)', borderRight: '1px solid rgba(197,168,128,0.25)' }} />
                 <div className="absolute bottom-3 left-3 w-3 h-3 pointer-events-none" style={{ borderBottom: '1px solid rgba(197,168,128,0.25)', borderLeft: '1px solid rgba(197,168,128,0.25)' }} />
@@ -171,11 +215,14 @@ export default function JewelrySection({
                     </svg>
                   </div>
                 )}
-              </div>
+              </button>
 
               <div className="w-full min-w-0 flex flex-col items-center gap-1 mt-2">
                 <h3
-                  className="tracking-wide font-normal"
+                  onClick={() => openDetail(product)}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#c5a880')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#000000')}
+                  className="tracking-wide font-normal line-clamp-2 cursor-pointer transition-colors"
                   style={{
                     fontFamily: "var(--font-jost), sans-serif",
                     color: '#000000',
@@ -212,7 +259,7 @@ export default function JewelrySection({
                 </span>
               </div>
 
-              <div className="mt-2 flex items-center gap-4">
+              <div className="flex items-center gap-4" style={{ marginTop: 'auto', paddingTop: '4px' }}>
                 <button
                   onClick={() => addToBag(product)}
                   className="cursor-pointer text-[9px] tracking-[0.22em] uppercase border-b transition-all duration-300 pb-0.5"

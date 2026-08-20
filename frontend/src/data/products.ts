@@ -125,7 +125,7 @@ export const PRODUCTS: Product[] = [
     description: "Classic huggie hoops forged from solid 18k yellow gold, with a high-polish mirror finish and a comfort-fit clasp.",
     modelPath: "/models/earrings/gold_hoop_clean.glb",
     arEnabled: true,
-    image: "/images/earrings2.png",
+    image: "/images/hoop.jpg",
 
     pair: true,
     preserveMaterials: true,
@@ -146,7 +146,7 @@ export const PRODUCTS: Product[] = [
     description: "Round studs in solid gold, sized to catch the light without the weight — the everyday pair.",
     modelPath: "/models/earrings/selene_studs.glb",
     arEnabled: true,
-    image: "/images/products/selene-studs.png",
+    image: "/images/stud.png",
     preserveMaterials: true,
     arType: 'stud',
     skinPenetration: 1.5,
@@ -228,7 +228,7 @@ export const PRODUCTS: Product[] = [
     description: "Hand-strung beads in black, white and red on a fine cord.",
     modelPath: "/models/necklaces/new.glb",
     arEnabled: true,
-    image: "/images/products/vega-beads.png",
+    image: "/images/ok.png",
     preserveMaterials: true,
     necklaceStrip: ['shirley', 'polysurface1421'],
     necklaceAnchor: {
@@ -245,7 +245,7 @@ export const PRODUCTS: Product[] = [
     description: "A brilliant-cut solitaire held in a four-prong crown, on a pavé-lined band made to measure.",
     modelPath: "/models/rings/polaris_solitaire.glb",
     arEnabled: true,
-    image: "/images/products/polaris-solitaire.png",
+    image: "/images/goldenring.jpg",
     preserveMaterials: true,
     arFit: { rotationDeg: [0, 0, 90] },
 
@@ -259,7 +259,7 @@ export const PRODUCTS: Product[] = [
     description: "A slender band traced with pavé-set stones, cast as a single piece and signed in gold.",
     modelPath: "/models/rings/rosanna_pave_band.glb",
     arEnabled: true,
-    image: "/images/products/rosanna-band.png",
+    image: "/images/rosanna.jpg",
     preserveMaterials: true,
     arFit: { rotationDeg: [-136, 0, 0] },
 
@@ -273,7 +273,7 @@ export const PRODUCTS: Product[] = [
     description: "A crescent-set band in moonlit silver, poised on the finger.",
     modelPath: "/models/rings/silver_moon_ring.glb",
     arEnabled: true,
-    image: "/images/products/silver-moon-ring.png",
+    image: "/images/moonring.jpg",
     preserveMaterials: true,
 
     ringFit: { alongT: 0.91, sizeCm: 1.2, liftCm: 0 },
@@ -286,7 +286,7 @@ export const PRODUCTS: Product[] = [
     description: "Woven gold strands set with blue topaz, clasped in hand-polished gold.",
     modelPath: "/models/bracelets/lyra_topaz_weave.glb",
     arEnabled: true,
-    image: "/images/products/lyra-weave.png",
+    image: "/images/topaz.png",
     preserveMaterials: true,
     necklaceStrip: ['cube', 'velvet'],
     braceletFit: { loose: 1.15 },
@@ -299,7 +299,7 @@ export const PRODUCTS: Product[] = [
     description: "A smooth gold bracelet, sculpted to sit softly against the wrist.",
     modelPath: "/models/bracelets/gold_bracelet.glb",
     arEnabled: true,
-    image: "/images/products/solene-bracelet.png",
+    image: "/images/gold-bangle.png",
     preserveMaterials: true,
     // Thicker band than the Lyra, so it needs a tighter hole to match its bulk.
     braceletFit: { loose: 1.0 },
@@ -312,7 +312,7 @@ export const PRODUCTS: Product[] = [
     description: "A double strand that follows the collarbone, finished with a beaded drop at the front.",
     modelPath: "/models/necklaces/double_layer_collar_bone_necklace.glb",
     arEnabled: true,
-    image: "/images/products/elara-chain.png",
+    image: "/images/beaded.png",
     preserveMaterials: true,
     // group1 is the display bust; nothing else in the file matches that name.
     necklaceStrip: ['group1'],
@@ -330,7 +330,7 @@ export const PRODUCTS: Product[] = [
     description: "A raised diamond crown on a slender band, cut to catch light from every angle.",
     modelPath: "/models/rings/doji_diamond_ring.glb",
     arEnabled: true,
-    image: "/images/products/doji-diamond-ring.png",
+    image: "/images/doji.jpg",
     preserveMaterials: true,
     ringFit: { alongT: 0.5, sizeCm: 1.2 },
   }
